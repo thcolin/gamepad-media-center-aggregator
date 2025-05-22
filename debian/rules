@@ -29,10 +29,16 @@ glfw:
 	cmake --build build-glfw
 	cmake --install build-glfw
 
+mupdf:
+	wget -qO- https://casper.mupdf.com/downloads/archive/mupdf-1.24.11-source.tar.lz | tar --lzip -xf - -C $(TMPDIR)
+	make -C $(TMPDIR)/mupdf-1.24.11-source prefix=$(PREFIX) build=release OS=Linux \
+		USE_SYSTEM_LIBS=yes USE_SYSTEM_GUMBO=no USE_SYSTEM_JBIG2DEC=no USE_SYSTEM_OPENJPEG=no \
+		TOOL_APPS= VIEW_APPS= install-shared-c -j$(shell nproc)
+
 %:
 	dh $@ --buildsystem=cmake+ninja --builddirectory=build
 
-override_dh_auto_configure: curl glfw
+override_dh_auto_configure: curl glfw mupdf
 	dh_auto_configure -- \
 		-DCMAKE_INSTALL_PREFIX=/usr \
 		-DPLATFORM_DESKTOP=ON \

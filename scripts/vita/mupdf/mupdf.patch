@@ -1,0 +1,18 @@
+diff --git a/Makerules b/Makerules
+index f582dc0614..f4c577b809 100644
+--- a/Makerules
++++ b/Makerules
+@@ -379,3 +379,13 @@ ifeq "$(OS)" "ios"
+   LD = xcrun ld
+   RANLIB = xcrun ranlib
+ endif
++
++ifeq "$(OS)" "psvita"
++  USE_SYSTEM_FREETYPE = yes
++  USE_SYSTEM_HARFBUZZ = yes
++  SYS_HARFBUZZ_CFLAGS = $(shell arm-vita-eabi-pkg-config --cflags harfbuzz)
++  SYS_HARFBUZZ_LIBS = $(shell arm-vita-eabi-pkg-config --libs harfbuzz)
++  USE_SYSTEM_LIBJPEG = yes
++  USE_SYSTEM_ZLIB = yes
++  XCFLAGS += -DHAVE_SIGSETJMP=0
++endif

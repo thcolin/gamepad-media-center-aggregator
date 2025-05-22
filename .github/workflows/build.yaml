@@ -99,7 +99,7 @@ jobs:
     - name: Update dependencies
       run: |
         dkp-pacman --noconfirm -U $BASE_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst
-        for pkg in mbedtls-3.6.5-1 libssh2-1.11.1-1 dav1d-1.5.3-1 curl-8.16.0-2 ffmpeg-7.1.4-5 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
+        for pkg in mbedtls-3.6.5-1 libssh2-1.11.1-1 dav1d-1.5.3-1 curl-8.16.0-2 ffmpeg-7.1.4-5 mupdf-1.24.11-1 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
           dkp-pacman --noconfirm -U $BASE_URL/switch-${pkg}-any.pkg.tar.zst
         done
         git config --system --add safe.directory $GITHUB_WORKSPACE
@@ -368,7 +368,7 @@ jobs:
         submodules: recursive
     - name: Install dependency
       run: |
-        for pkg in glfw-3.5.0-1 curl-8.16.0-1 mpv-0.41.0-1 libwebp-1.6.0-1; do
+        for pkg in glfw-3.5.0-1 curl-8.16.0-1 mpv-0.41.0-1 libmupdf-1.24.11-1 libwebp-1.6.0-1; do
           curl -sLO https://github.com/dragonflylee/switchfin/releases/download/mingw-packages/${MINGW_PACKAGE_PREFIX}-${pkg}-any.pkg.tar.zst
         done
         pacman -U --noconfirm *.pkg.tar.zst
@@ -397,7 +397,7 @@ jobs:
           -DVERSION_BUILD=${{ github.run_number }}
         cmake --build build
         cv2pdb64 build/Switchfin.exe
-        cp -a README.md ${MINGW_PREFIX}/bin/libmpv-2.dll build
+        cp -a README.md ${MINGW_PREFIX}/bin/{libmpv-2.dll,libmupdf.dll} build
     - name: Upload Assets
       uses: actions/upload-artifact@v6
       with:
@@ -406,6 +406,7 @@ jobs:
           build/Switchfin.exe
           build/Switchfin.pdb
           build/libmpv-2.dll
+          build/libmupdf.dll
           build/README.md
 
   build-android:
