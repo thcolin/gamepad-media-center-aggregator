@@ -399,6 +399,7 @@ public:
             this->season.ratingKey,
             [ASYNC_TOKEN](const media::Container<media::Item>& r) {
                 ASYNC_RELEASE
+                brls::Logger::info("[DBG] season episodes -> {}", r.Items.size());
                 this->recycler->setDataSource(
                     new SeasonEpisodesDataSource(this->season, this->fallbackSummary, r.Items));
             },
@@ -554,10 +555,11 @@ MediaSeries::MediaSeries(const plex::Item& item, bool localContext)
 }
 
 MediaSeries::~MediaSeries() {
-    brls::Logger::debug("Tab MediaSeries: delete");
+    brls::Logger::info("[DBG] ~MediaSeries begin (exit show overview)");
     Image::cancel(this->imageLogo);
     Image::cancel(this->imagePoster);
     Image::cancel(this->imageBackdrop);
+    brls::Logger::info("[DBG] ~MediaSeries end");
 }
 
 void MediaSeries::doRequest() {
@@ -704,6 +706,8 @@ void MediaSeries::doSeries() {
 
 // Renders the show fiche from an Item — shared by the server and local paths.
 void MediaSeries::applySeries(const media::Item& item) {
+    brls::Logger::info("[DBG] applySeries \"{}\" childCount={} roles={} art={}", item.title, item.childCount,
+        item.roles.size(), !item.art.empty());
     this->labelTitle->setText(item.title);
     Image::load(this->imagePoster, item.thumb, 325);
     // banner: backdrop (art) + cut-out logo nested at the bottom of
@@ -813,6 +817,7 @@ void MediaSeries::doSeason() {
     AppConfig::instance().backend().getChildren(this->seriesId,
         [ASYNC_TOKEN](const media::Container<media::Item>& r) {
             ASYNC_RELEASE
+            brls::Logger::info("[DBG] doSeason -> {} seasons", r.Items.size());
             if (r.Items.empty()) {
                 this->labelSeasons->setVisibility(brls::Visibility::GONE);
                 this->seasons->setVisibility(brls::Visibility::GONE);

@@ -180,13 +180,14 @@ MediaMovie::MediaMovie(const plex::Item& item, bool localContext)
 }
 
 MediaMovie::~MediaMovie() {
-    brls::Logger::debug("Tab MediaMovie: delete");
+    brls::Logger::info("[DBG] ~MediaMovie begin (exit movie overview)");
     auto& dm = DownloadManager::instance();
     dm.getProgressEvent()->unsubscribe(this->progressSub);
     dm.getStatusEvent()->unsubscribe(this->statusSub);
     Image::cancel(this->imageLogo);
     Image::cancel(this->imagePoster);
     Image::cancel(this->imageBackdrop);
+    brls::Logger::info("[DBG] ~MediaMovie end");
 }
 
 void MediaMovie::updateDownloadButton() {
@@ -332,6 +333,7 @@ void MediaMovie::downloadSource(int mediaIndex) {
 }
 
 void MediaMovie::buildSources(const media::Item& item) {
+    brls::Logger::info("[DBG] buildSources media={}", item.media.size());
     this->sourcesBox->clearViews();
     this->sourcesBox->setVisibility(brls::Visibility::GONE);
     this->noticeBox->clearViews();
@@ -508,6 +510,8 @@ void MediaMovie::buildSources(const media::Item& item) {
 // Renders the fiche from an Item — shared by the server and local-catalog
 // (offline / downloaded) paths.
 void MediaMovie::applyMovie(const media::Item& item) {
+    brls::Logger::info("[DBG] applyMovie \"{}\" media={} roles={} art={}", item.title, item.media.size(),
+        item.roles.size(), !item.art.empty());
     this->labelTitle->setText(item.title);
     Image::load(this->imagePoster, item.thumb, 325);
     // banner: backdrop (art) + centered cut-out logo; the poster
