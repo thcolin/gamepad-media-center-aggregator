@@ -113,6 +113,23 @@ int main(int argc, char* argv[]) {
         }
     }
 
+#if defined(__PSV__)
+    // === DEBUG BUILD (overview GPU-crash diagnosis) ===
+    // Force a line-buffered file log so a tester can just launch normally, hit
+    // the crash, and pull ux0:/data/gmca_debug.log via VitaShell. The last line
+    // written is the operation that crashed. Not for release — this lives only
+    // on the debug/vita-gpu-overview branch.
+    {
+        FILE* dbg = std::fopen("ux0:/data/gmca_debug.log", "w+");
+        if (dbg) {
+            std::setvbuf(dbg, nullptr, _IOLBF, 0);
+            brls::Logger::setLogOutput(dbg);
+            brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+            brls::Logger::info("[DBG] gmca debug build — {} {}", AppVersion::getCommit(), AppVersion::getVersion());
+        }
+    }
+#endif
+
     std::setlocale(LC_ALL, "C.UTF-8");
     // Load cookies and settings
     auto& conf = AppConfig::instance();

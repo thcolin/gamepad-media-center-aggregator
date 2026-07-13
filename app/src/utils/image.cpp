@@ -1,5 +1,6 @@
 #include "utils/image.hpp"
 #include "utils/thread.hpp"
+#include <atomic>
 #include <fmt/format.h>
 #include <borealis/core/cache_helper.hpp>
 #ifdef USE_WEBP
@@ -200,6 +201,7 @@ void Image::doRequest(HTTP& s) {
         bool hasAlpha = isWebp;
 #ifdef BOREALIS_USE_GXM
         if (imageData) {
+            brls::Logger::info("[DBG] img decode {} {}x{} bytes={}", this->url, imageW, imageH, data.size());
             // Cap artwork at 1024px per side before it becomes a GXM texture.
             // GXM rounds texture dimensions up to the next power of two, so an
             // unresized backdrop (Stremio serves full-res Cinemeta art — its
@@ -274,7 +276,15 @@ void Image::doRequest(HTTP& s) {
                 int tex = brls::TextureCache::instance().getCache(urlCopy);
                 if (tex == 0 && imageData != nullptr) {
                     NVGcontext* vg = brls::Application::getNVGContext();
+                    // [DBG] This nvgCreateImageRGBA is the GXM texture upload — the
+                    // prime suspect for the "GPU crash / freeze". The "begin" line is
+                    // flushed BEFORE the call, so if the GPU dies here it is the last
+                    // line in the log (with the offending url + dimensions).
+                    static std::atomic<int> dbgTexCount{0};
+                    brls::Logger::info(
+                        "[DBG] gxm upload begin #{} {} {}x{} flags={}", dbgTexCount.load() + 1, urlCopy, imageW, imageH, imageFlags);
                     tex = nvgCreateImageRGBA(vg, imageW, imageH, imageFlags, imageData);
+                    brls::Logger::info("[DBG] gxm upload done  #{} tex={}", dbgTexCount.fetch_add(1) + 1, tex);
                     brls::TextureCache::instance().addCache(urlCopy, tex);
                 }
                 if (tex > 0) imagePtr->innerSetImage(tex);
