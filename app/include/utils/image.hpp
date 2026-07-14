@@ -30,11 +30,18 @@ public:
         // backend-specific URL building (Plex /photo/:/transcode, Jellyfin /Images...);
         // absolute external paths (cast faces...) are returned unchanged by the backend
         std::string url = AppConfig::instance().backend().imageUrl(path, width, height);
-        if (!url.empty()) with(view, url);
+        // width/height are also forwarded to the decoder: backends that can't
+        // resize server-side (Stremio's absolute Cinemeta/RPDB urls) still get
+        // the artwork downscaled to its display size before the GPU upload, so a
+        // 580x859 RPDB poster becomes a 512² texture instead of a 1024² one — the
+        // Vita GPU-memory exhaustion behind the overview crash (GXM only).
+        if (!url.empty()) with(view, url, width, height);
     }
 
     /// @brief 设置要加载内容的图片组件。此函数需要工作在主线程。
-    static void with(brls::Image* view, const std::string& url);
+    /// width/height (>0) = the intended display size, used on GXM to cap the
+    /// decoded texture to the smallest power-of-two that still covers it.
+    static void with(brls::Image* view, const std::string& url, int width = 0, int height = 0);
 
     /// @brief 取消请求，并清空图片。此函数需要工作在主线程。
     static void cancel(brls::Image* view);
@@ -48,6 +55,8 @@ private:
     std::string url;
     brls::Image* image;
     HTTP::Cancel isCancel;
+    int targetW = 0;  // intended display size (GXM texture cap); 0 = unknown
+    int targetH = 0;
 
     /// 对象池
     inline static std::list<Ref> pool;

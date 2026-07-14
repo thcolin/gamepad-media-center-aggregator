@@ -133,7 +133,7 @@ Image::Image() : image(nullptr) {
 
 Image::~Image() { brls::Logger::verbose("delete Image {}", fmt::ptr(this)); }
 
-void Image::with(brls::Image* view, const std::string& url) {
+void Image::with(brls::Image* view, const std::string& url, int width, int height) {
     int tex = brls::TextureCache::instance().getCache(url);
     if (tex > 0) {
         view->innerSetImage(tex);
@@ -158,6 +158,8 @@ void Image::with(brls::Image* view, const std::string& url) {
 
     item->image = view;
     item->url = url;
+    item->targetW = width;
+    item->targetH = height;
     item->isCancel->store(false);
     view->ptrLock();
     // 设置图片组件不处理纹理的销毁，由缓存统一管理纹理销毁
@@ -201,18 +203,26 @@ void Image::doRequest(HTTP& s) {
         bool hasAlpha = isWebp;
 #ifdef BOREALIS_USE_GXM
         if (imageData) {
-            brls::Logger::info("[DBG] img decode {} {}x{} bytes={}", this->url, imageW, imageH, data.size());
-            // Cap artwork at 1024px per side before it becomes a GXM texture.
-            // GXM rounds texture dimensions up to the next power of two, so an
-            // unresized backdrop (Stremio serves full-res Cinemeta art — its
-            // imageUrl can't resize an absolute CDN url the way Plex/Jellyfin do)
-            // at 1920x1080 turns into a 2048x2048 texture (~4 MB in DXT5). A few
-            // of those exhaust the Vita's GPU memory; the allocator then returns
-            // null mid-render and GXM faults — the "GPU crash / blue light" users
-            // hit while browsing and when leaving a media overview. The screen is
-            // 960x544, so 1024 is lossless even full-screen and quarters the
-            // texture. 2x box-averaging keeps the downscale cheap on the CPU.
-            while (imageW > 1024 || imageH > 1024) {
+            brls::Logger::info("[DBG] img decode {} {}x{} bytes={} target={}x{}", this->url, imageW, imageH,
+                data.size(), this->targetW, this->targetH);
+            // Downscale to the smallest power-of-two texture that still covers the
+            // intended DISPLAY size before the GXM upload. GXM rounds texture
+            // dimensions up to the next power of two, so any source Stremio can't
+            // resize server-side (absolute Cinemeta/RPDB urls) bloats the GPU:
+            // a 1920x1080 backdrop -> 2048² (~4 MB), and — the case that crashed
+            // 1.0.5 — a 580x859 RPDB poster shown at 300px -> a full 1024² texture
+            // (~1 MB) instead of 512². A show page stacks many of these and the
+            // Vita runs out of GPU memory -> GXM fault / blue light. Capping to
+            // the display size (poster 300 -> 512², backdrop 1080 -> 1024², hard
+            // ceiling 1024) keeps each texture minimal while staying crisp on the
+            // 960x544 screen. 2x box-averaging keeps the downscale cheap.
+            int tW = this->targetW, tH = this->targetH;
+            if (tW > 0 && tH == 0) tH = (int)((int64_t)tW * imageH / imageW);  // poster: derive H from ratio
+            if (tH > 0 && tW == 0) tW = (int)((int64_t)tH * imageW / imageH);
+            uint32_t capW = tW > 0 ? MIN(nearest_po2((uint32_t)tW), 1024u) : 1024u;
+            uint32_t capH = tH > 0 ? MIN(nearest_po2((uint32_t)tH), 1024u) : 1024u;
+            while (imageData && (imageW > 1024 || imageH > 1024 ||
+                      (nearest_po2((uint32_t)imageW) > capW && nearest_po2((uint32_t)imageH) > capH))) {
                 int nw, nh;
                 uint8_t* half = halve_rgba(imageData, imageW, imageH, &nw, &nh);
                 if (!half) break;
