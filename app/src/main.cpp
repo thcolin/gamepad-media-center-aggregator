@@ -115,16 +115,23 @@ int main(int argc, char* argv[]) {
 
 #if defined(__PSV__)
     // === DEBUG BUILD (overview GPU-crash diagnosis) ===
-    // Force a line-buffered file log so a tester can just launch normally, hit
-    // the crash, and pull ux0:/data/gmca_debug.log via VitaShell. The last line
-    // written is the operation that crashed. Not for release — this lives only
-    // on the debug/vita-gpu-overview branch.
+    // On Vita, brls::Logger::log writes via sceClibPrintf and IGNORES the
+    // setLogOutput() FILE* (logger.hpp), so a plain -o file stays 0 KB — which
+    // is exactly what the first debug build produced. Instead we subscribe to
+    // the log Event (fired for every log line) and append it to
+    // ux0:/data/gmca_debug.log ourselves, flushing after each line so the last
+    // line survives a GPU/kernel crash. Not for release — debug branch only.
     {
-        FILE* dbg = std::fopen("ux0:/data/gmca_debug.log", "w+");
+        static FILE* dbg = std::fopen("ux0:/data/gmca_debug.log", "w+");
         if (dbg) {
-            std::setvbuf(dbg, nullptr, _IOLBF, 0);
-            brls::Logger::setLogOutput(dbg);
             brls::Logger::setLogLevel(brls::LogLevel::LOG_DEBUG);
+            brls::Logger::setThreadSafeLogging(true);  // logs come from the pool + UI thread
+            // `dbg` has static storage, so the capture-less lambda may use it.
+            brls::Logger::getLogEvent()->subscribe(
+                [](brls::Logger::TimePoint, brls::LogLevel level, const std::string& msg) {
+                    std::fprintf(dbg, "[%d] %s\n", (int)level, msg.c_str());
+                    std::fflush(dbg);
+                });
             brls::Logger::info("[DBG] gmca debug build — {} {}", AppVersion::getCommit(), AppVersion::getVersion());
         }
     }
