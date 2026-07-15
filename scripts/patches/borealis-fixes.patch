@@ -16,7 +16,7 @@ index 31713045..d8223c0c 100644
  
      static void removeWatchedKeys(const BrlsKeyCombination key);
 diff --git a/library/include/borealis/core/cache_helper.hpp b/library/include/borealis/core/cache_helper.hpp
-index 0236dfed..8617ddee 100644
+index 0236dfed..8dbc8159 100644
 --- a/library/include/borealis/core/cache_helper.hpp
 +++ b/library/include/borealis/core/cache_helper.hpp
 @@ -35,9 +35,15 @@ struct Node
@@ -71,12 +71,13 @@ index 0236dfed..8617ddee 100644
  
          // Update the values of two maps
          cacheMap[key]                  = cacheList.begin();
-@@ -139,6 +155,20 @@ class LRUCache
+@@ -139,6 +155,21 @@ class LRUCache
          }
      }
  
 +    /// Cap the total bytes pinned by cached values (0 = unlimited). Entries
-+    /// added with bytes=0 are exempt (their size is unknown).
++    /// added with bytes=0 never count toward the cap (their size is unknown)
++    /// but remain evictable like any other LRU entry.
 +    void setByteCapacity(size_t bytes)
 +    {
 +        this->byteCapacity = bytes;
@@ -92,7 +93,7 @@ index 0236dfed..8617ddee 100644
      /**
       * A dirty cache is not able to be hit
       * @param value
-@@ -186,6 +216,8 @@ class LRUCache
+@@ -186,6 +217,8 @@ class LRUCache
  
    private:
      size_t capacity = 1;
@@ -101,7 +102,7 @@ index 0236dfed..8617ddee 100644
      T defaultValue;
      std::list<Node<K, T>> cacheList;
      std::unordered_map<K, CacheIter> cacheMap;
-@@ -209,6 +241,7 @@ class LRUCache
+@@ -209,6 +242,7 @@ class LRUCache
              if (i->count <= 0)
              {
                  num--;
@@ -109,7 +110,7 @@ index 0236dfed..8617ddee 100644
                  nvgDeleteImage(vg, i->value);
                  cacheMap.erase(i->key);
                  valueMap.erase(i->value);
-@@ -248,13 +281,22 @@ class TextureCache : public Singleton<TextureCache>
+@@ -248,13 +282,22 @@ class TextureCache : public Singleton<TextureCache>
      int getCache(const std::string& key) { return cache.get(key); }
  
      /**

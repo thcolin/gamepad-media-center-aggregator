@@ -180,8 +180,13 @@ void Image::cancel(brls::Image* view) {
 }
 
 void Image::doRequest(HTTP& s) {
+    // clear() ends in view->ptrUnlock(), and ptrLockCounter is a plain int
+    // only ever touched from the UI thread (Box::removeView, the free queue) —
+    // so the worker-side failure paths must route it through brls::sync, like
+    // the success path does.
     if (this->isCancel->load()) {
-        Image::clear(this->image.load());
+        auto* imagePtr = this->image.load();
+        brls::sync([imagePtr] { Image::clear(imagePtr); });
         return;
     }
     try {
@@ -326,7 +331,8 @@ void Image::doRequest(HTTP& s) {
         });
     } catch (const std::exception& ex) {
         brls::Logger::warning("request image {} {}", this->url, ex.what());
-        Image::clear(this->image.load());
+        auto* imagePtr = this->image.load();
+        brls::sync([imagePtr] { Image::clear(imagePtr); });
     }
 }
 

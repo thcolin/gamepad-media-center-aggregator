@@ -519,6 +519,10 @@ void MPVCore::draw(brls::Rect area, float alpha) {
     nvgFillPaint(vg, nvgImagePattern(vg, 0, 0, rect.getWidth(), rect.getHeight(), 0, nvg_image, alpha));
     nvgFill(vg);
 #elif defined(BOREALIS_USE_GXM)
+    // FBO init failed (GPU OOM): nothing to draw. Today nvg_image == 0 would
+    // fall back to the 1x1 dummy texture deep in nanovg_gxm, but don't rely
+    // on that implicit guarantee.
+    if (!mpv_fbo.render_target) return;
     NVGcontext *vg = brls::Application::getNVGContext();
     NVGpaint img =
         nvgImagePattern(vg, area.getMinX(), area.getMinY(), area.getWidth(), area.getHeight(), 0, nvg_image, alpha);
