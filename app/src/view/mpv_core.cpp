@@ -82,6 +82,11 @@ void MPVCore::on_update(void *self) {
         uint64_t flags = mpv_render_context_update(mpv->mpv_context);
 #if defined(MPV_SW_RENDER) || defined(BOREALIS_USE_GXM)
         if (flags & MPV_RENDER_UPDATE_FRAME) {
+#ifdef BOREALIS_USE_GXM
+            // FBO alloc can fail under GPU-memory pressure (init() leaves
+            // render_target null): skip the render, mpv keeps decoding audio.
+            if (!mpv->mpv_fbo.render_target) return;
+#endif
             mpv_render_context_render(mpv->mpv_context, mpv->mpv_params);
             mpv_render_context_report_swap(mpv->mpv_context);
         }
@@ -271,25 +276,43 @@ void MPVCore::init() {
         int texture_width = DISPLAY_WIDTH;
         int texture_height = DISPLAY_HEIGHT;
         int texture_stride = ALIGN(texture_width, 8);
+        // Every step of this chain allocates GPU memory and the player is
+        // created AFTER browsing already filled LPDDR/CDRAM with artwork, so
+        // each one can fail right here. On failure leave render_target null:
+        // on_update/setFrameSize skip the FBO render (audio keeps playing,
+        // video stays black) instead of handing gxmCreateFramebuffer a NULL
+        // texture and data-aborting.
         nvg_image = nvgCreateImageRGBA(vg, texture_width, texture_height, 0, nullptr);
-        NVGXMtexture *texture = nvgxmImageHandle(vg, nvg_image);
-
-        NVGXMframebufferInitOptions framebufferOpts = {
-            .display_buffer_count = 1,  // Must be 1 for custom FBOs
-            .scenesPerFrame = 1,
-            .render_target = texture,
-            .color_format = SCE_GXM_COLOR_FORMAT_U8U8U8U8_ABGR,
-            .color_surface_type = SCE_GXM_COLOR_SURFACE_LINEAR,
-            .display_width = texture_width,
-            .display_height = texture_height,
-            .display_stride = texture_stride,
-        };
-        NVGXMframebuffer *fbo = gxmCreateFramebuffer(&framebufferOpts);
-        mpv_fbo.render_target = fbo->gxm_render_target;
-        mpv_fbo.color_surface = &fbo->gxm_color_surfaces[0].surface;
-        mpv_fbo.depth_stencil_surface = &fbo->gxm_depth_stencil_surface;
-        mpv_fbo.w = texture_width;
-        mpv_fbo.h = texture_height;
+        NVGXMtexture *texture = nvg_image > 0 ? nvgxmImageHandle(vg, nvg_image) : nullptr;
+        if (texture != nullptr && texture->data != nullptr) {
+            NVGXMframebufferInitOptions framebufferOpts = {
+                .display_buffer_count = 1,  // Must be 1 for custom FBOs
+                .scenesPerFrame = 1,
+                .render_target = texture,
+                .color_format = SCE_GXM_COLOR_FORMAT_U8U8U8U8_ABGR,
+                .color_surface_type = SCE_GXM_COLOR_SURFACE_LINEAR,
+                .display_width = texture_width,
+                .display_height = texture_height,
+                .display_stride = texture_stride,
+            };
+            NVGXMframebuffer *fbo = gxmCreateFramebuffer(&framebufferOpts);
+            if (fbo != nullptr && fbo->gxm_render_target != nullptr) {
+                mpv_fbo.render_target = fbo->gxm_render_target;
+                mpv_fbo.color_surface = &fbo->gxm_color_surfaces[0].surface;
+                mpv_fbo.depth_stencil_surface = &fbo->gxm_depth_stencil_surface;
+                mpv_fbo.w = texture_width;
+                mpv_fbo.h = texture_height;
+            } else if (fbo != nullptr) {
+                gxmDeleteFramebuffer(fbo);
+            }
+        }
+        if (!mpv_fbo.render_target) {
+            if (nvg_image > 0) {
+                nvgDeleteImage(vg, nvg_image);
+                nvg_image = 0;
+            }
+            brls::Logger::error("mpv: GXM FBO allocation failed (GPU memory exhausted), video output disabled");
+        }
     }
 #else
     mpv_opengl_init_params gl_init_params{get_proc_address, nullptr};
@@ -454,6 +477,8 @@ void MPVCore::setFrameSize(brls::Rect area) {
     // but mpvRenderContextRender(...) will call functions similar to beginFrame() and endFrame() to draw content to FBO,
     // and that will cause error in GXM, so call in brls::sync to make the mpv drawing calls outside the brls::Application::frame().
     brls::sync([this]() {
+        // no FBO (GPU OOM at init): nothing to render into
+        if (!this->mpv_fbo.render_target) return;
         mpv_render_context_render(this->mpv_context, mpv_params);
         mpv_render_context_report_swap(this->mpv_context);
     });
