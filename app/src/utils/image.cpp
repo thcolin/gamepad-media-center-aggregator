@@ -136,19 +136,24 @@ Image::~Image() { brls::Logger::verbose("delete Image {}", fmt::ptr(this)); }
 void Image::with(brls::Image* view, const std::string& url, int width, int height) {
     int tex = brls::TextureCache::instance().getCache(url);
     if (tex > 0) {
+        // The cache owns this texture. brls::Image defaults freeTexture to
+        // true, so a view whose FIRST load is a cache hit (common on Stremio:
+        // identical absolute URLs across row cells and detail pages) would
+        // nvgDeleteImage a cached texture from clear()/its destructor and
+        // leave a dead id in the cache — drawn later, that's a GXM fault.
+        view->setFreeTexture(false);
         view->innerSetImage(tex);
         return;
     }
 
-    Ref item;
-    std::lock_guard<std::mutex> lock(requestMutex);
+    // One fresh Image per request. Recycling a pooled object whose previous
+    // doRequest could still be in flight shared url/image/isCancel between two
+    // requests: resetting isCancel here REVOKED the cancellation of the old
+    // transfer, which then finished and cached its pixels under this request's
+    // key (wrong artwork, persistent), while both sides raced on the fields.
+    Ref item = std::make_shared<Image>();
 
-    if (pool.empty()) {
-        item = std::make_shared<Image>();
-    } else {
-        item = pool.front();
-        pool.pop_front();
-    }
+    std::lock_guard<std::mutex> lock(requestMutex);
 
     auto it = requests.insert(std::make_pair(view, item));
     if (!it.second) {
@@ -160,7 +165,6 @@ void Image::with(brls::Image* view, const std::string& url, int width, int heigh
     item->url = url;
     item->targetW = width;
     item->targetH = height;
-    item->isCancel->store(false);
     view->ptrLock();
     // 设置图片组件不处理纹理的销毁，由缓存统一管理纹理销毁
     view->setFreeTexture(false);
@@ -177,7 +181,7 @@ void Image::cancel(brls::Image* view) {
 
 void Image::doRequest(HTTP& s) {
     if (this->isCancel->load()) {
-        Image::clear(this->image);
+        Image::clear(this->image.load());
         return;
     }
     try {
@@ -201,6 +205,9 @@ void Image::doRequest(HTTP& s) {
         }
 
         bool hasAlpha = isWebp;
+        // exact GPU footprint of the upload, forwarded to the TextureCache
+        // byte capacity; 0 = let addCache estimate (w*h*4)
+        size_t texBytes = 0;
 #ifdef BOREALIS_USE_GXM
         if (imageData) {
             brls::Logger::info("[DBG] img decode {} {}x{} bytes={} target={}x{}", this->url, imageW, imageH,
@@ -254,11 +261,13 @@ void Image::doRequest(HTTP& s) {
             }
             size_t size = nearest_po2(imageW) * nearest_po2(imageH);
             if (!hasAlpha) size >>= 1;
+            // GXM allocates exactly the po2 DXT buffer (4 KB-rounded)
+            texBytes = size;
             // calloc: the compressor skips blocks outside the image, and the
             // whole power-of-two buffer is uploaded to GPU memory — padding
             // must be deterministic zeros, not heap garbage
             auto* compressed = (uint8_t*)calloc(size, 1);
-            dxt_compress(compressed, imageData, imageW, imageH, hasAlpha);
+            if (compressed) dxt_compress(compressed, imageData, imageW, imageH, hasAlpha);
 #ifdef USE_WEBP
             if (isWebp)
                 WebPFree(imageData);
@@ -266,10 +275,12 @@ void Image::doRequest(HTTP& s) {
 #endif
                 stbi_image_free(imageData);
 
+            // compressed == nullptr (RAM exhausted): drop this artwork — the
+            // sync below treats a null imageData as "nothing to upload"
             imageData = compressed;
         }
 #endif
-        auto imagePtr = this->image;
+        auto* imagePtr = this->image.load();
         auto urlCopy = this->url;
         auto isCancelCopy = this->isCancel;
 #ifdef BOREALIS_USE_GXM
@@ -280,7 +291,7 @@ void Image::doRequest(HTTP& s) {
 #endif
 
         brls::Logger::verbose("request Image {} size {}", urlCopy, data.size());
-        brls::sync([imagePtr, urlCopy, isCancelCopy, imageData, imageW, imageH, isWebp, imageFlags] {
+        brls::sync([imagePtr, urlCopy, isCancelCopy, imageData, imageW, imageH, isWebp, imageFlags, texBytes] {
             if (!isCancelCopy->load()) {
                 // Load texture
                 int tex = brls::TextureCache::instance().getCache(urlCopy);
@@ -295,7 +306,7 @@ void Image::doRequest(HTTP& s) {
                         "[DBG] gxm upload begin #{} {} {}x{} flags={}", dbgTexCount.load() + 1, urlCopy, imageW, imageH, imageFlags);
                     tex = nvgCreateImageRGBA(vg, imageW, imageH, imageFlags, imageData);
                     brls::Logger::info("[DBG] gxm upload done  #{} tex={}", dbgTexCount.fetch_add(1) + 1, tex);
-                    brls::TextureCache::instance().addCache(urlCopy, tex);
+                    brls::TextureCache::instance().addCache(urlCopy, tex, texBytes);
                 }
                 if (tex > 0) imagePtr->innerSetImage(tex);
                 clear(imagePtr);
@@ -315,7 +326,7 @@ void Image::doRequest(HTTP& s) {
         });
     } catch (const std::exception& ex) {
         brls::Logger::warning("request image {} {}", this->url, ex.what());
-        Image::clear(this->image);
+        Image::clear(this->image.load());
     }
 }
 
@@ -325,9 +336,8 @@ void Image::clear(brls::Image* view) {
     auto it = requests.find(view);
     if (it == requests.end()) return;
 
-    it->second->image->ptrUnlock();
+    view->ptrUnlock();
     it->second->image = nullptr;
     it->second->isCancel->store(true);
-    pool.push_back(it->second);
     requests.erase(it);
 }

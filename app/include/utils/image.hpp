@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <borealis.hpp>
 #include "api/http.hpp"
 #include "api/backend.hpp"
@@ -53,13 +54,13 @@ private:
 
 private:
     std::string url;
-    brls::Image* image;
+    // written by clear() (UI thread) while doRequest (worker) reads it on its
+    // cancel/error paths — atomic so neither side sees a torn pointer
+    std::atomic<brls::Image*> image;
     HTTP::Cancel isCancel;
     int targetW = 0;  // intended display size (GXM texture cap); 0 = unknown
     int targetH = 0;
 
-    /// 对象池
-    inline static std::list<Ref> pool;
     inline static std::mutex requestMutex;
     inline static std::unordered_map<brls::Image*, Ref> requests;
 };
