@@ -513,13 +513,16 @@ inline std::vector<StreamOption> parseStreams(const nlohmann::json& j) {
 // structured fields and re-render with our own consistent badges, rather than
 // passing the addon's text through verbatim. (Research: every client does this.)
 
-/// Resolution label from a stream's name+title ("4K"/"1080p"/"720p"/"480p"/
-/// "CAM"/"SD"). CAM-class (cam/ts/telesync/screener) ranks below any resolution.
+/// Resolution label from a stream's name+title ("4K"/"1440p"/"1080p"/"720p"/
+/// "480p"/"CAM"/"SD"). CAM-class (cam/ts/telesync/screener) ranks below any
+/// resolution. 1440p gets its own label so the PSV filter can drop it: an
+/// unlabelled 1440p used to fall through to "SD" and rank ABOVE 1080p on Vita.
 inline std::string qualityLabel(const std::string& text) {
     std::string t = text;
     for (auto& c : t) c = (char)std::tolower((unsigned char)c);
     if (t.find("2160") != std::string::npos || t.find("4k") != std::string::npos || t.find("uhd") != std::string::npos)
         return "4K";
+    if (t.find("1440") != std::string::npos || t.find("2k") != std::string::npos) return "1440p";
     if (t.find("1080") != std::string::npos) return "1080p";
     if (t.find("720") != std::string::npos) return "720p";
     if (t.find("480") != std::string::npos) return "480p";
@@ -531,7 +534,8 @@ inline std::string qualityLabel(const std::string& text) {
 
 /// Sort rank for a resolution label (higher = better; CAM/SD low).
 inline int qualityRank(const std::string& label) {
-    if (label == "4K") return 5;
+    if (label == "4K") return 6;
+    if (label == "1440p") return 5;
     if (label == "1080p") return 4;
     if (label == "720p") return 3;
     if (label == "480p" || label == "SD") return 2;
@@ -548,8 +552,29 @@ inline int qualityRankVita(const std::string& label) {
     if (label == "720p") return 5;
     if (label == "480p" || label == "SD") return 4;
     if (label == "1080p") return 3;  // decodable but heavy -> fallback only
-    if (label == "4K") return 1;     // exceeds the decoder; excluded upstream
+    if (label == "4K" || label == "1440p") return 1;  // exceed the decoder; excluded upstream
     return 2;                        // CAM
+}
+
+/// PS Vita video-codec rank. The Vita ffmpeg build ships NO hevc/av1/vp9/xvid
+/// decoder at all (scripts/vita/ffmpeg/VITABUILD compiles --disable-decoders
+/// plus an H.264-centric allowlist) — such streams cannot play, ever, not even
+/// slowly. An empty label (no codec token in the addon text) is most often
+/// H.264 in the wild, so it stays playable-by-default, below explicit H.264.
+inline int codecRankVita(const std::string& label) {
+    if (label == "H.264") return 2;
+    if (label.empty()) return 1;  // unknown: best effort
+    return 0;                     // HEVC / AV1 / XviD: no decoder on Vita
+}
+
+/// PS Vita audio-codec rank, for DEPRIORITIZATION only (never exclusion: a
+/// stream whose audio the Vita build can't decode — no eac3/dca/truehd/opus in
+/// VITABUILD — still plays video, just silent, and the tokens are less reliable
+/// than video ones). Decodable (AAC/AC3/FLAC/MP3) > unknown > undecodable.
+inline int audioRankVita(const std::string& label) {
+    if (label == "AAC" || label == "AC3" || label == "FLAC" || label == "MP3") return 2;
+    if (label.empty()) return 1;
+    return 0;  // DDP / DTS / TrueHD / Atmos / Opus
 }
 
 /// First "<number> <GB|MB|TB>" found, normalized ("8.4 GB"). Empty if none.
@@ -583,7 +608,8 @@ inline std::string parseSizeLabel(const std::string& text) {
     return num + " " + unit;
 }
 
-/// Normalized video codec ("HEVC"/"AV1"/"H.264") from name+title; empty if none.
+/// Normalized video codec ("HEVC"/"AV1"/"H.264"/"XviD") from name+title; empty
+/// if none. H.264 is tested before XviD: "MPEG-4 AVC" names hit "avc" first.
 inline std::string parseCodecLabel(const std::string& text) {
     std::string t = text;
     for (auto& c : t) c = (char)std::tolower((unsigned char)c);
@@ -594,6 +620,29 @@ inline std::string parseCodecLabel(const std::string& text) {
     if (t.find("x264") != std::string::npos || t.find("h264") != std::string::npos ||
         t.find("h.264") != std::string::npos || t.find("avc") != std::string::npos)
         return "H.264";
+    if (t.find("xvid") != std::string::npos || t.find("divx") != std::string::npos) return "XviD";
+    return "";
+}
+
+/// Normalized audio codec from name+title; empty if none. Ordered so the
+/// Dolby Digital Plus spellings match before plain AC3 ("eac3" contains "ac3").
+inline std::string parseAudioLabel(const std::string& text) {
+    std::string t = text;
+    for (auto& c : t) c = (char)std::tolower((unsigned char)c);
+    if (t.find("truehd") != std::string::npos) return "TrueHD";
+    if (t.find("atmos") != std::string::npos) return "Atmos";
+    if (t.find("eac3") != std::string::npos || t.find("e-ac3") != std::string::npos ||
+        t.find("eac-3") != std::string::npos || t.find("ddp") != std::string::npos ||
+        t.find("dd+") != std::string::npos || t.find("digital plus") != std::string::npos)
+        return "DDP";
+    if (t.find("dts") != std::string::npos) return "DTS";
+    if (t.find("opus") != std::string::npos) return "Opus";
+    if (t.find("flac") != std::string::npos) return "FLAC";
+    if (t.find("aac") != std::string::npos) return "AAC";
+    if (t.find("ac3") != std::string::npos || t.find("ac-3") != std::string::npos ||
+        t.find("dd5.1") != std::string::npos)
+        return "AC3";
+    if (t.find("mp3") != std::string::npos) return "MP3";
     return "";
 }
 
@@ -642,10 +691,13 @@ inline media::Media streamToMedia(const StreamOption& s, const std::string& addo
         p.accessible = true;
         p.exists = true;
         m.parts.push_back(std::move(p));
-        std::string codec = parseCodecLabel(blob);
+        // structured fields, not just display: the PSV stream filter/sort in
+        // resolveAllStreams reads them (codecRankVita / audioRankVita)
+        m.videoCodec = parseCodecLabel(blob);
+        m.audioCodec = parseAudioLabel(blob);
         std::string size = parseSizeLabel(s.title.empty() ? s.name : s.title);
         std::string detail;
-        if (!codec.empty()) detail = codec;
+        if (!m.videoCodec.empty()) detail = m.videoCodec;
         if (!size.empty()) detail += (detail.empty() ? "" : "  ·  ") + size;
         m.detail = detail;
     } else if (!s.infoHash.empty()) {
