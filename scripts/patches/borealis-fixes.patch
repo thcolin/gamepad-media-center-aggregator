@@ -15,6 +15,126 @@ index 31713045..d8223c0c 100644
      static void addToWatchedKeys(const BrlsKeyCombination key);
  
      static void removeWatchedKeys(const BrlsKeyCombination key);
+diff --git a/library/include/borealis/core/cache_helper.hpp b/library/include/borealis/core/cache_helper.hpp
+index 0236dfed..8617ddee 100644
+--- a/library/include/borealis/core/cache_helper.hpp
++++ b/library/include/borealis/core/cache_helper.hpp
+@@ -35,9 +35,15 @@ struct Node
+     /// Reference count, 1 for each cache hit
+     size_t count = 1;
+ 
+-    Node(K k, T v)
++    /// Memory the cached value pins (GPU texture bytes); 0 when unknown.
++    /// Feeds the LRUCache byte capacity — capping only the ENTRY COUNT lets
++    /// a few hundred posters exhaust the PS Vita's GPU memory.
++    size_t bytes = 0;
++
++    Node(K k, T v, size_t b = 0)
+         : key(k)
+         , value(v)
++        , bytes(b)
+     {
+     }
+ };
+@@ -80,20 +86,30 @@ class LRUCache
+         return cacheMap[key]->value;
+     }
+ 
+-    void set(K key, T value)
++    void set(K key, T value, size_t bytes = 0)
+     {
+         if (isCacheHit(key))
+         {
+             throw std::logic_error("Can not cache the same key twice.");
+         }
+ 
+-        // Check capacity limits
++        // Check capacity limits (+1: make room for the entry being added,
++        // otherwise the cache stabilizes one entry above its capacity)
+         if (cacheList.size() >= capacity)
+         {
+-            deleteCache(cacheList.size() - capacity);
++            deleteCache(cacheList.size() - capacity + 1);
++        }
++        // Byte capacity: evict LRU unreferenced entries until the new entry
++        // fits. deleteCache returns non-zero when nothing more is evictable
++        // (every remaining entry is pinned) — stop there rather than loop.
++        while (byteCapacity != 0 && totalBytes + bytes > byteCapacity && !cacheList.empty())
++        {
++            if (deleteCache(1) != 0)
++                break;
+         }
+         // Add new cache
+-        cacheList.push_front(Node<K, T>(key, value));
++        totalBytes += bytes;
++        cacheList.push_front(Node<K, T>(key, value, bytes));
+ 
+         // Update the values of two maps
+         cacheMap[key]                  = cacheList.begin();
+@@ -139,6 +155,20 @@ class LRUCache
+         }
+     }
+ 
++    /// Cap the total bytes pinned by cached values (0 = unlimited). Entries
++    /// added with bytes=0 are exempt (their size is unknown).
++    void setByteCapacity(size_t bytes)
++    {
++        this->byteCapacity = bytes;
++        while (byteCapacity != 0 && totalBytes > byteCapacity && !cacheList.empty())
++        {
++            if (deleteCache(1) != 0)
++                break;
++        }
++    }
++
++    size_t bytesUsed() const { return totalBytes; }
++
+     /**
+      * A dirty cache is not able to be hit
+      * @param value
+@@ -186,6 +216,8 @@ class LRUCache
+ 
+   private:
+     size_t capacity = 1;
++    size_t byteCapacity = 0;  // 0 = unlimited
++    size_t totalBytes   = 0;
+     T defaultValue;
+     std::list<Node<K, T>> cacheList;
+     std::unordered_map<K, CacheIter> cacheMap;
+@@ -209,6 +241,7 @@ class LRUCache
+             if (i->count <= 0)
+             {
+                 num--;
++                totalBytes -= i->bytes;
+                 nvgDeleteImage(vg, i->value);
+                 cacheMap.erase(i->key);
+                 valueMap.erase(i->value);
+@@ -248,13 +281,22 @@ class TextureCache : public Singleton<TextureCache>
+     int getCache(const std::string& key) { return cache.get(key); }
+ 
+     /**
+-     * Add cache
++     * Add cache. `bytes` = memory the texture pins (feeds the byte capacity);
++     * when 0 it is estimated as w*h*4 from the texture itself — callers that
++     * know the real footprint (compressed uploads) should pass it.
+      */
+-    void addCache(const std::string& key, size_t texture)
++    void addCache(const std::string& key, size_t texture, size_t bytes = 0)
+     {
+         if (texture <= 0)
+             return;
+-        cache.set(key, texture);
++        if (bytes == 0)
++        {
++            int w = 0, h = 0;
++            nvgImageSize(brls::Application::getNVGContext(), (int)texture, &w, &h);
++            if (w > 0 && h > 0)
++                bytes = (size_t)w * h * 4;
++        }
++        cache.set(key, texture, bytes);
+     }
+ 
+     /**
 diff --git a/library/include/borealis/core/notification_manager.hpp b/library/include/borealis/core/notification_manager.hpp
 index 6f92431b..024a5dfe 100644
 --- a/library/include/borealis/core/notification_manager.hpp
@@ -97,6 +217,85 @@ index 227cd789..a651c841 100644
      /**
        * Called by frame() to draw the view onscreen.
        * Views should not draw outside of their bounds (they
+diff --git a/library/include/borealis/extern/nanovg/nanovg_gxm.h b/library/include/borealis/extern/nanovg/nanovg_gxm.h
+index 8bb4ff7b..ea4d9b7b 100644
+--- a/library/include/borealis/extern/nanovg/nanovg_gxm.h
++++ b/library/include/borealis/extern/nanovg/nanovg_gxm.h
+@@ -312,6 +312,10 @@ static GXMNVGtexture *gxmnvg__allocTexture(GXMNVGcontext *gxm) {
+ 
+ static GXMNVGtexture *gxmnvg__findTexture(GXMNVGcontext *gxm, int id) {
+     int i;
++    // id 0 means "no image"; without this guard it would match any slot the
++    // garbage collector memset to zero and hand out a dead texture.
++    if (id == 0)
++        return NULL;
+     for (i = 0; i < gxm->ntextures; i++)
+         if (gxm->textures[i].id == id)
+             return &gxm->textures[i];
+@@ -1448,9 +1452,14 @@ static void gxmnvg__convexFillStencil(GXMNVGcontext *gxm, GXMNVGcall *call) {
+     // Disable color output
+     gxmnvg__setFragmentProgram(gxm, gxm->depth_texture_shader.prog.frag);
+ 
+-    // Set texture
++    // Set texture. Fall back to the dummy texture (same idiom as
++    // gxmnvg__setUniforms) when the image is 0 or was deleted and collected —
++    // dereferencing the missing texture here was a GPU fault.
+     tex = gxmnvg__findTexture(gxm, call->image);
+-    sceGxmSetFragmentTexture(gxm->context, 0, &tex->texture.tex);
++    if (tex == NULL)
++        tex = gxmnvg__findTexture(gxm, gxm->dummyTex);
++    if (tex != NULL)
++        sceGxmSetFragmentTexture(gxm->context, 0, &tex->texture.tex);
+ 
+     for (i = 0; i < npaths; i++) {
+         for(int j = 0; j < paths[i].fillCount; j++) {
+@@ -2040,7 +2049,9 @@ int nvgxmCreateImageFromHandle(NVGcontext *ctx, SceGxmTexture *texture) {
+ NVGXMtexture *nvgxmImageHandle(NVGcontext *ctx, int image) {
+     GXMNVGcontext *gxm = (GXMNVGcontext *) nvgInternalParams(ctx)->userPtr;
+     GXMNVGtexture *tex = gxmnvg__findTexture(gxm, image);
+-    return &tex->texture;
++    // image 0 (failed nvgCreateImage*) or a deleted texture: let the caller
++    // handle the failure instead of returning a pointer into NULL.
++    return tex ? &tex->texture : NULL;
+ }
+ 
+ #endif /* NANOVG_GL_IMPLEMENTATION */
+diff --git a/library/include/borealis/extern/nanovg/nanovg_gxm_utils.h b/library/include/borealis/extern/nanovg/nanovg_gxm_utils.h
+index 28a06ed6..f2345010 100644
+--- a/library/include/borealis/extern/nanovg/nanovg_gxm_utils.h
++++ b/library/include/borealis/extern/nanovg/nanovg_gxm_utils.h
+@@ -794,7 +794,20 @@ NVGXMframebuffer *gxmCreateFramebuffer(const NVGXMframebufferInitOptions *opts)
+     render_target_params.multisampleLocations = 0;
+     render_target_params.driverMemBlock = -1;
+ 
+-    sceGxmCreateRenderTarget(&render_target_params, &fb->gxm_render_target);
++    // Fails under GPU-memory pressure (out of render targets / driver memory);
++    // unchecked, the NULL target used to reach sceGxmBeginScene and fault there.
++    if (sceGxmCreateRenderTarget(&render_target_params, &fb->gxm_render_target) != 0 ||
++        fb->gxm_render_target == NULL) {
++        gxmDeleteFramebuffer(fb);
++        return NULL;
++    }
++
++    // A custom render target whose texture allocation already failed has no
++    // backing memory: bail out before the memset below writes to NULL.
++    if (opts->render_target && opts->render_target->data == NULL) {
++        gxmDeleteFramebuffer(fb);
++        return NULL;
++    }
+ 
+     fb->gxm_color_surfaces = (NVGXMcolorSurface *) malloc(opts->display_buffer_count * sizeof(NVGXMcolorSurface));
+     if (fb->gxm_color_surfaces == NULL) {
+@@ -882,7 +895,8 @@ void gxmDeleteFramebuffer(NVGXMframebuffer *fb) {
+         free(fb->gxm_color_surfaces);
+     }
+ 
+-    sceGxmDestroyRenderTarget(fb->gxm_render_target);
++    if (fb->gxm_render_target)
++        sceGxmDestroyRenderTarget(fb->gxm_render_target);
+ 
+     free(fb);
+ }
 diff --git a/library/include/borealis/views/bottom_bar.hpp b/library/include/borealis/views/bottom_bar.hpp
 index 17a93796..21ff14e9 100644
 --- a/library/include/borealis/views/bottom_bar.hpp
