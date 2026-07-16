@@ -1,8 +1,13 @@
 
 # Maintainer: WinterMute <davem@devkitpro.org>
+#
+# GMCA fork note: this diverges from the upstream devkitPro package by ONE flag
+# — ENABLE_THREADED_RESOLVER (see below). pkgrel is bumped so the built package
+# (switch-curl-8.16.0-3) is distinct from devkitPro's -2, and the build pulls
+# THIS one over the stock prebuilt (mirrors the Vita, scripts/vita/curl).
 pkgname=switch-curl
 pkgver=8.16.0
-pkgrel=2
+pkgrel=3
 pkgdesc='An URL retrieval utility and library'
 arch=('any')
 url="https://curl.se/"
@@ -23,9 +28,22 @@ build() {
 
   autoreconf -fi
 
+  # --enable-threaded-resolver (vs the stock package's --disable-threaded-resolver):
+  # the app runs every request from a background thread (ThreadPool / brls::async),
+  # and sets CURLOPT_NOSIGNAL. With the SYNCHRONOUS resolver, a slow or hung
+  # getaddrinfo() can only be aborted via SIGALRM, which libcurl arms on the main
+  # thread alone — so no CURLOPT_*TIMEOUT bounds a DNS lookup off the main thread
+  # (curl docs: "timeouts cannot be honored during DNS lookups ... work around by
+  # building with c-ares or threaded-resolver"). A slow-to-resolve hostname would
+  # then stall a request indefinitely while a raw LAN IP (no lookup) works — the
+  # same defect fixed on the Vita (scripts/vita/curl). The threaded resolver runs
+  # getaddrinfo in a worker thread the timeout can abandon; c-ares is unusable on
+  # the console (no /etc/resolv.conf). IPv6 stays OFF: the Switch socket service
+  # registers only AF_INET/AF_ROUTE (switchbrew.org/wiki/Sockets_services), so an
+  # AF_INET6 socket can't connect — enabling it only adds failed AAAA attempts.
   ./configure --prefix=$PORTLIBS_PREFIX --host=aarch64-none-elf \
     --disable-shared --enable-static --disable-ipv6 --disable-unix-sockets \
-    --disable-manual --disable-threaded-resolver --disable-progress-meter \
+    --disable-manual --enable-threaded-resolver --disable-progress-meter \
     --without-zstd --without-brotli --without-libpsl --enable-websockets \
     --with-mbedtls --with-default-ssl-backend=mbedtls
   sed -i '/HAVE_SOCKETPAIR/d' lib/curl_config.h

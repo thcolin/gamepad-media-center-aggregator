@@ -108,6 +108,12 @@ jobs:
       image: devkitpro/devkita64:20260219
     env:
       BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/switch-portlibs
+      # curl is rebuilt with --enable-threaded-resolver (scripts/switch/curl) and
+      # hosted on this fork's own switch-portlibs release: the app resolves server
+      # hostnames from background threads, where the synchronous resolver cannot
+      # honor DNS timeouts, so a slow lookup stalls forever. The other packages
+      # stay on the upstream (known-good) release. Mirrors the Vita (see build-psv).
+      CURL_URL: https://github.com/thcolin/gamepad-media-center-aggregator/releases/download/switch-portlibs
     steps:
     - uses: actions/checkout@v6
       with:
@@ -124,9 +130,14 @@ jobs:
     - name: Update dependencies
       run: |
         dkp-pacman --noconfirm -U $BASE_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst
-        for pkg in mbedtls-3.6.5-1 libssh2-1.11.1-1 dav1d-1.5.3-1 curl-8.16.0-2 ffmpeg-7.1.5-5 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
+        for pkg in mbedtls-3.6.5-1 libssh2-1.11.1-1 dav1d-1.5.3-1 ffmpeg-7.1.5-5 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
           dkp-pacman --noconfirm -U $BASE_URL/switch-${pkg}-any.pkg.tar.zst
         done
+        # curl (threaded resolver) from this fork's release; fall back to the
+        # upstream prebuilt until the custom package is published (scripts/switch/curl
+        # + the switch-portlibs workflow). Activates automatically once -3 exists.
+        dkp-pacman --noconfirm -U $CURL_URL/switch-curl-8.16.0-3-any.pkg.tar.zst \
+          || dkp-pacman --noconfirm -U $BASE_URL/switch-curl-8.16.0-2-any.pkg.tar.zst
         git config --system --add safe.directory $GITHUB_WORKSPACE
     - name: Build libusbhsfs
       run: |

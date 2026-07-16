@@ -16,6 +16,11 @@ cd "$(dirname "$0")/.."
 DRIVER="${DRIVER:-deko3d}"
 IMAGE="devkitpro/devkita64:20260219"
 BASE_URL="https://github.com/dragonflylee/switchfin/releases/download/switch-portlibs"
+# curl is rebuilt with --enable-threaded-resolver (scripts/switch/curl) and hosted
+# on this fork's own switch-portlibs release: the app resolves server hostnames
+# from background threads, where the synchronous resolver can't honor DNS
+# timeouts, so a slow lookup stalls forever. Other packages stay on upstream.
+CURL_URL="https://github.com/thcolin/gamepad-media-center-aggregator/releases/download/switch-portlibs"
 BUILD_DIR="build_switch_${DRIVER}"
 
 CMAKE_EXTRA=""
@@ -46,9 +51,15 @@ docker run --rm --platform linux/amd64 \
     fi
     dkp-pacman --noconfirm -U $BASE_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst
     for pkg in switch-mbedtls-3.6.5-1-any switch-libssh2-1.11.1-1-any switch-dav1d-1.5.3-1-any \
-               switch-curl-8.16.0-2-any switch-ffmpeg-7.1.5-5-any switch-nspmini-main-1-any; do
+               switch-ffmpeg-7.1.5-5-any switch-nspmini-main-1-any; do
         dkp-pacman --noconfirm -U $BASE_URL/\${pkg}.pkg.tar.zst
     done
+    # curl (threaded resolver) from this fork's release; fall back to the upstream
+    # prebuilt until the custom package is published (see scripts/switch/curl +
+    # the switch-portlibs workflow). The threaded resolver activates automatically
+    # once the -3 asset exists; until then the build uses upstream's -2.
+    dkp-pacman --noconfirm -U $CURL_URL/switch-curl-8.16.0-3-any.pkg.tar.zst \
+        || dkp-pacman --noconfirm -U $BASE_URL/switch-curl-8.16.0-2-any.pkg.tar.zst
     dkp-pacman --noconfirm -U $BASE_URL/$LIBMPV_PKG
 
     git clone https://github.com/DarkMatterCore/libusbhsfs.git --depth=1 /tmp/libusbhsfs
