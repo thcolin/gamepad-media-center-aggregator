@@ -18,6 +18,7 @@
 #include "activity/main_activity.hpp"
 #include "api/jellyfin/auth.hpp"
 #include "utils/config.hpp"
+#include "utils/net_error.hpp"
 
 using namespace brls::literals;
 
@@ -64,6 +65,13 @@ void JellyfinAdd::submit() {
         return;
     }
 
+    // A .local (mDNS) address can never resolve on Switch/Vita, so warn now
+    // rather than after a request that is guaranteed to fail (net_error.hpp).
+    if (net::isMdnsHost(url)) {
+        this->labelStatus->setText(net::dnsHelp(url));
+        return;
+    }
+
     std::string user = this->cellUser->getValue();
     std::string pass = this->cellPasswd->getValue();
 
@@ -83,6 +91,9 @@ void JellyfinAdd::submit() {
             r = jellyfin::login(url, user, pass);
             r.serverName = name;
             ok = true;
+        } catch (const HTTP::Error& ex) {
+            // DNS failure → actionable "use the server's IP" hint; else raw message.
+            error = net::errorText(ex, url);
         } catch (const std::exception& ex) {
             error = ex.what();
         }

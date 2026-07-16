@@ -422,6 +422,7 @@
     "choose_type": "Chọn loại kết nối",
     "switch_title": "Kết nối",
     "add": "Thêm",
+    "dns_unresolved": "Không thể phân giải “{}”. Trên Switch/Vita, hãy dùng địa chỉ IPv4 của máy chủ (ví dụ: http://192.168.1.50:8096) — tên .local (mDNS) và chỉ IPv6 không được hỗ trợ.",
     "jellyfin": {
       "title_jellyfin": "Đăng nhập vào Jellyfin",
       "title_emby": "Đăng nhập vào Emby",

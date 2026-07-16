@@ -422,6 +422,7 @@
     "choose_type": "选择连接类型",
     "switch_title": "连接",
     "add": "添加",
+    "dns_unresolved": "无法解析“{}”。在 Switch/Vita 上，请使用服务器的 IPv4 地址（例如 http://192.168.1.50:8096）——不支持 .local（mDNS）和仅 IPv6 的名称。",
     "jellyfin": {
       "title_jellyfin": "登录 Jellyfin",
       "title_emby": "登录 Emby",

@@ -11,6 +11,7 @@
 #include <atomic>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <curl/system.h>
 
 #include <borealis/core/event.hpp>
@@ -50,6 +51,25 @@ public:
     };
 
     using Cookies = std::vector<Cookie>;
+
+    /// Coarse category of a failed request, exposed so callers can react to a
+    /// class of failure without depending on <curl/curl.h> error codes. Kept
+    /// deliberately small — only distinctions the UI acts on live here.
+    enum class ErrorKind {
+        Other,          ///< HTTP status >= 400, connect/TLS failure, timeout, proxy resolve, …
+        ResolveFailed,  ///< the server host failed to resolve (curl COULDNT_RESOLVE_HOST)
+    };
+
+    /// Exception thrown by every request path. `what()` carries a
+    /// human-readable message (curl's strerror or an "http status N" string);
+    /// `kind` lets a caller special-case a category — e.g. turn a DNS failure
+    /// into an actionable "use the server's IP address" hint (the consoles have
+    /// no mDNS and are IPv4-only, so .local / IPv6-only hosts never resolve).
+    class Error : public std::runtime_error {
+    public:
+        Error(ErrorKind kind, const std::string& message) : std::runtime_error(message), kind(kind) {}
+        ErrorKind kind;
+    };
 
     HTTP();
     HTTP(const HTTP& other) = delete;

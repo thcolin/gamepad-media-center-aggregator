@@ -422,6 +422,7 @@
     "choose_type": "Выберите тип подключения",
     "switch_title": "Подключения",
     "add": "Добавить",
+    "dns_unresolved": "Не удаётся разрешить «{}». На Switch/Vita используйте IPv4-адрес сервера (например, http://192.168.1.50:8096) — имена .local (mDNS) и только IPv6 не поддерживаются.",
     "jellyfin": {
       "title_jellyfin": "Вход в Jellyfin",
       "title_emby": "Вход в Emby",

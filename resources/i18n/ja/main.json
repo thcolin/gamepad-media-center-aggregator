@@ -422,6 +422,7 @@
     "choose_type": "接続の種類を選択",
     "switch_title": "接続先",
     "add": "追加",
+    "dns_unresolved": "「{}」を解決できません。Switch/Vita ではサーバーの IPv4 アドレスを使用してください（例: http://192.168.1.50:8096）。.local（mDNS）や IPv6 のみの名前には対応していません。",
     "jellyfin": {
       "title_jellyfin": "Jellyfin にサインイン",
       "title_emby": "Emby にサインイン",
