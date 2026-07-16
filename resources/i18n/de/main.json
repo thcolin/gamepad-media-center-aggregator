@@ -422,6 +422,7 @@
     "choose_type": "Wähle deinen Verbindungstyp",
     "switch_title": "Verbindungen",
     "add": "Hinzufügen",
+    "dns_unresolved": "„{}“ kann nicht aufgelöst werden. Auf Switch/Vita die IPv4-Adresse deines Servers verwenden (z. B. http://192.168.1.50:8096) – .local (mDNS) und reine IPv6-Namen werden nicht unterstützt.",
     "jellyfin": {
       "title_jellyfin": "In Jellyfin anmelden",
       "title_emby": "In Emby anmelden",

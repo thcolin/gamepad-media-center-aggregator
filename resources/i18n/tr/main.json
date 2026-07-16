@@ -422,6 +422,7 @@
     "choose_type": "Bağlantı türünü seçin",
     "switch_title": "Bağlantılar",
     "add": "Ekle",
+    "dns_unresolved": "\"{}\" çözümlenemiyor. Switch/Vita’da sunucunuzun IPv4 adresini kullanın (ör. http://192.168.1.50:8096) — .local (mDNS) ve yalnızca IPv6 adları desteklenmez.",
     "jellyfin": {
       "title_jellyfin": "Jellyfin'e Giriş Yap",
       "title_emby": "Emby'ye Giriş Yap",

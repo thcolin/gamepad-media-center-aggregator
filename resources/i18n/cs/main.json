@@ -422,6 +422,7 @@
     "choose_type": "Zvolte typ připojení",
     "switch_title": "Připojení",
     "add": "Přidat",
+    "dns_unresolved": "Nelze přeložit „{}“. Na Switch/Vita použij IPv4 adresu svého serveru (např. http://192.168.1.50:8096) — názvy .local (mDNS) a pouze IPv6 nejsou podporovány.",
     "jellyfin": {
       "title_jellyfin": "Přihlásit se do Jellyfin",
       "title_emby": "Přihlásit se do Emby",

@@ -16,6 +16,7 @@
 #include "tab/remote_add.hpp"
 #include "client/client.hpp"
 #include "utils/dialog.hpp"
+#include "utils/net_error.hpp"
 #include <curl/curl.h>
 
 using namespace brls::literals;
@@ -252,6 +253,13 @@ void RemoteAdd::submit() {
         return;
     }
 
+    // A .local (mDNS) host can never resolve on Switch/Vita — warn now instead
+    // of after a request guaranteed to fail (net_error.hpp).
+    if (net::isMdnsHost(r.url)) {
+        Dialog::show(net::dnsHelp(r.url));
+        return;
+    }
+
     this->btnSave->setVisibility(brls::Visibility::GONE);
     this->spinner->setVisibility(brls::Visibility::VISIBLE);
     brls::Application::blockInputs();
@@ -266,6 +274,10 @@ void RemoteAdd::submit() {
             auto client = remote::create(r);
             client->list(r.url);
             ok = true;
+        } catch (const HTTP::Error& ex) {
+            // WebDAV/Apache go through HTTP: a DNS failure gets the "use the
+            // server's IP" hint instead of curl's terse message.
+            error = net::errorText(ex, r.url);
         } catch (const std::exception& ex) {
             error = ex.what();
         }

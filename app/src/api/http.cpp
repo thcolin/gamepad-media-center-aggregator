@@ -71,15 +71,20 @@ char __attribute__((optimize("no-optimize-sibling-calls"))) * sce_strdup(const c
 #define CURL_PROGRESSFUNC_CONTINUE 0x10000001
 #endif
 
-class curl_error : public std::exception {
-public:
-    explicit curl_error(CURLcode code) : m(curl_easy_strerror(code)) {}
-    explicit curl_error(const std::string& arg) : m(arg) {}
-    const char* what() const noexcept override { return m.c_str(); }
+/// Map a libcurl result to the coarse HTTP::ErrorKind the UI reacts to. Only a
+/// failure to resolve the *server host* is singled out (see HTTP::Error), since
+/// the hint names that host. CURLE_COULDNT_RESOLVE_PROXY is deliberately left as
+/// Other: it's about the (separate, user-set) proxy address, so it must keep
+/// curl's own "Couldn't resolve proxy name" instead of pointing at the server.
+static HTTP::ErrorKind kindFromCurl(CURLcode code) {
+    if (code == CURLE_COULDNT_RESOLVE_HOST) return HTTP::ErrorKind::ResolveFailed;
+    return HTTP::ErrorKind::Other;
+}
 
-private:
-    std::string m;
-};
+/// A curl-code failure carries the mapped kind; a message-only failure (HTTP
+/// status) is always ErrorKind::Other.
+static HTTP::Error curl_error(CURLcode code) { return HTTP::Error(kindFromCurl(code), curl_easy_strerror(code)); }
+static HTTP::Error curl_error(const std::string& arg) { return HTTP::Error(HTTP::ErrorKind::Other, arg); }
 
 static std::string user_agent =
     fmt::format("{}/{} ({})", AppVersion::getPackageName(), AppVersion::getVersion(), AppVersion::getPlatform());

@@ -422,6 +422,7 @@
     "choose_type": "Elige el tipo de conexión",
     "switch_title": "Conexiones",
     "add": "Añadir",
+    "dns_unresolved": "No se puede resolver «{}». En Switch/Vita, usa la dirección IPv4 de tu servidor (p. ej. http://192.168.1.50:8096); los nombres .local (mDNS) y solo IPv6 no son compatibles.",
     "jellyfin": {
       "title_jellyfin": "Inicia sesión en Jellyfin",
       "title_emby": "Inicia sesión en Emby",
