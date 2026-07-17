@@ -316,6 +316,11 @@ void MediaMovie::downloadSource(int mediaIndex) {
     if (mediaIndex < 0 || mediaIndex >= (int)this->movieItem.media.size()) return;
     const media::Media& m = this->movieItem.media[mediaIndex];
     if (!m.playable()) return;  // only playable sources carry a downloadable URL
+#if defined(ENABLE_TORRENT)
+    // A torrent is "playable" (via the engine) but carries no downloadable URL —
+    // its `parts` is empty, so front() would be UB. Nothing to download.
+    if (m.parts.empty() || m.parts.front().key.empty()) return;
+#endif
     // addDownload dedups by ratingKey (one download per movie); reflect the real
     // outcome instead of always claiming "queued".
     auto& dm = DownloadManager::instance();
@@ -430,22 +435,41 @@ void MediaMovie::buildSources(const media::Item& item) {
         std::vector<brls::View*> cells;
         // quality chip
         cells.push_back(sourcePill(m.videoResolution.empty() ? "SD" : m.videoResolution, pillBg, textCol));
-        // status chip: cached debrid (gold) / uncached debrid / direct
+        // status chip: torrent P2P (gold) / cached debrid (gold) / uncached debrid / direct
+#if defined(ENABLE_TORRENT)
+        bool torrentRow = m.kind == media::SourceKind::Torrent;
+        if (torrentRow)
+            cells.push_back(sourcePill("main/stremio/source/torrent_badge"_i18n, goldBg, goldFg));
+        else
+#endif
         if (m.kind == media::SourceKind::Debrid)
             cells.push_back(m.cached ? sourcePill("main/stremio/source/cached"_i18n, goldBg, goldFg)
                                      : sourcePill("main/stremio/source/uncached"_i18n, pillBg, greyCol));
         else
             cells.push_back(sourcePill("main/stremio/source/direct"_i18n, pillBg, textCol));
+        // seeders (addon-provided; only known/meaningful on a torrent row). -1 =
+        // unknown -> omit the pill (never a misleading "👥 0"). Neutral grey pill so
+        // it groups with the quality chip without competing with the gold badge.
+#if defined(ENABLE_TORRENT)
+        if (torrentRow && m.seeders >= 0)
+            cells.push_back(sourcePill(fmt::format("\xF0\x9F\x91\xA5 {}", m.seeders), pillBg, textCol));
+#endif
         // source name (grows) + meta (codec · size)
         cells.push_back(sourceLabel(m.label, 15, textCol, true));
         if (!m.detail.empty()) cells.push_back(sourceLabel(m.detail, 13, greyCol));
-        // trailing download glyph: signals the line is downloadable (X button)
-        auto* dl = new SVGImage();
-        dl->setImageFromSVGRes("icon/ico-download-light.svg");
-        dl->setWidth(17);
-        dl->setHeight(17);
-        dl->setMarginLeft(12);
-        cells.push_back(dl);
+        // trailing download glyph: signals the line is downloadable (X button).
+        // A live torrent P2P stream is not downloadable here, so its row omits it.
+#if defined(ENABLE_TORRENT)
+        if (!torrentRow)
+#endif
+        {
+            auto* dl = new SVGImage();
+            dl->setImageFromSVGRes("icon/ico-download-light.svg");
+            dl->setWidth(17);
+            dl->setHeight(17);
+            dl->setMarginLeft(12);
+            cells.push_back(dl);
+        }
 
         SourceRow* row = makeRow(cells);
         int idx = (int)i;
@@ -455,7 +479,11 @@ void MediaMovie::buildSources(const media::Item& item) {
         });
         // A = play this release (relabel the default "OK" hint to "Lire")
         row->updateActionHint(brls::BUTTON_A, "main/media/play"_i18n);
-        // X = download this exact release (hint shown in the action bar)
+        // X = download this exact release (hint shown in the action bar) — not for
+        // torrents (nothing to download; the P2P stream is live).
+#if defined(ENABLE_TORRENT)
+        if (!torrentRow)
+#endif
         row->registerAction("main/download/start"_i18n, brls::BUTTON_X, [this, idx](brls::View*) {
             this->downloadSource(idx);
             return true;

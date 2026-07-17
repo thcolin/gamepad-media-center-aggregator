@@ -475,6 +475,8 @@
       "uncached": "ダウンロード",
       "direct": "ダイレクト",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: P2P ネットワークに接続中…",
+      "torrent_peers": "{} ピア",
       "link_badge": "リンク",
       "torrents": "{} 件の Torrent ソース — デブリッドが必要",
       "links": "{} 件の外部リンク — ここでは再生できません",

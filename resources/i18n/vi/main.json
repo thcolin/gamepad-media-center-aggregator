@@ -475,6 +475,8 @@
       "uncached": "Tải xuống",
       "direct": "Trực tiếp",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: đang kết nối tới mạng lưới P2P…",
+      "torrent_peers": "{} peer",
       "link_badge": "Liên kết",
       "torrents": "{} nguồn torrent — cần dịch vụ debrid",
       "links": "{} liên kết bên ngoài — không phát được ở đây",

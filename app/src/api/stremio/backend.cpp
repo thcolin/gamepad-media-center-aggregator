@@ -23,6 +23,9 @@
 #include "api/stremio/auth.hpp"
 #include "api/media/langs.hpp"
 #include "utils/config.hpp"
+#if defined(ENABLE_TORRENT)
+#include "torrent/session.hpp"  // on-device torrent streaming (desktop/switch, gated)
+#endif
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
 #include <borealis/core/i18n.hpp>
@@ -257,6 +260,13 @@ std::vector<media::Media> resolveAllStreams(
         int qx = qualityRank(x.videoResolution), qy = qualityRank(y.videoResolution);
 #endif
         if (qx != qy) return qx > qy;                           // then best quality
+#if defined(ENABLE_TORRENT)
+        // Among same-quality playable sources, an already-resolved URL (direct or
+        // debrid) beats a torrent: the torrent still has to find peers and buffer
+        // from the swarm, so it sinks to the bottom of the playable group.
+        bool xt = x.kind == media::SourceKind::Torrent, yt = y.kind == media::SourceKind::Torrent;
+        if (x.playable() && xt != yt) return yt;
+#endif
         if (x.playable() && x.cached != y.cached) return x.cached;  // then cached debrid first
         return false;
     });
@@ -956,6 +966,22 @@ media::PlaybackSource StremioBackend::resolvePlayback(
     // empty url means no playable source -> the player shows a "playback failed"
     // dialog. We never throw: a cross-TU throw on the borealis async task loop
     // (which does not wrap tasks in try/catch) would abort the app.
+#if defined(ENABLE_TORRENT)
+    if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty()) {
+        // On-device torrent streaming (desktop/switch). Stand up (or reuse) the single
+        // ephemeral engine, open the infoHash+fileIdx, and hand mpv the local HTTP
+        // URL it serves. open() may block on metadata (cold magnet) — fine, we run
+        // inside the player's brls::async worker; the swarm buffering then happens
+        // server-side (HTTP reads block until pieces land). The engine is torn down
+        // by PlayerView on stop/close. An empty url (no metadata / no peers) surfaces
+        // as the same "playback failed" dialog — we never throw across the boundary.
+        std::string url = torrent::EngineSession::instance().open(
+            version.infoHash, version.torrentFileIdx, version.torrentSources);
+        if (url.empty()) return {};
+        std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
+        return {url, extra, false, "directplay"};
+    }
+#endif
     if (version.parts.empty() || version.parts.front().key.empty()) return {};
     std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += ",http-proxy=\"" + HTTP::PROXY + "\"";

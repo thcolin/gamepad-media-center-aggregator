@@ -1,0 +1,10 @@
+libutp vendored from https://github.com/bittorrent/libutp
+Upstream commit: 2b364cbb0650bdab64a5de2abb4518f9f228ec44
+Retrieved: 2026-07-16
+License: MIT (see LICENSE)
+
+Only the sources needed to build the library are vendored (the 6 translation
+units, their headers, the Windows inet_ntop shim, LICENSE and README). The
+upstream build files (Makefile, *.vcxproj, ucat sample, parse_log.py) are not
+vendored — GMCA builds libutp through torrent/CMakeLists.txt instead. No source
+file was modified.

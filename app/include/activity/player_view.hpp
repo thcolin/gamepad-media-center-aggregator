@@ -105,4 +105,23 @@ private:
     brls::VoidEvent::Subscription settingSubscribeID;
     MPVCustomEvent::Subscription customEventSubscribeID;
     VideoView* view = nullptr;
+
+#if defined(ENABLE_TORRENT)
+    /// Live P2P buffering feedback (torrent sources only). Instead of a separate
+    /// pill, this drives the VideoView's CENTRAL loading box (the spinner already
+    /// shown on load): showTorrentLoading() puts up "connecting to the swarm…" for
+    /// the whole resolvePlayback + mpv buffering window, a periodic timer samples
+    /// torrent::EngineSession::stats() and rewrites the central label (peers / ⬇
+    /// speed / buffered %), and it is retired the moment playback really starts
+    /// (first LOADING_END / progress) or the player goes away. No extra view is
+    /// created and nothing focusable is added, so OSD navigation is untouched. All
+    /// of this compiles only when ENABLE_TORRENT is defined — an OFF build is
+    /// byte-for-byte unchanged.
+    void showTorrentLoading();    ///< central loading + "connecting" line, start the ticker
+    void updateTorrentLoading();  ///< one stats() sample -> central label (ticker callback)
+    void hideTorrentLoading();    ///< stop the ticker and clear the central message (idempotent)
+
+    brls::RepeatingTimer torrentTicker;
+    bool torrentBuffering = false;
+#endif
 };

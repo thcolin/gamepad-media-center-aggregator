@@ -58,6 +58,7 @@ docker run --rm --platform linux/amd64 \
         -DCMAKE_BUILD_TYPE=Release \
         -DPLATFORM_SWITCH=ON \
         -DUSE_LIBUSBHSFS=ON \
+        -DENABLE_TORRENT=ON \
         -DBUILTIN_NSP=ON
     make -C $BUILD_DIR GMCA.nro -j\$(nproc)
 "

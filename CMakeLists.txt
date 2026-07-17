@@ -88,8 +88,18 @@ elseif (CMAKE_INSTALL)
     set(BRLS_RESOURCES_DIR ${CMAKE_INSTALL_PREFIX}/share/gmca)
 endif ()
 
+# On-device torrent streaming engine (feat/stremio-torrent-support). OFF by
+# default so the Switch/Vita/PS4/desktop app builds are byte-for-byte unaffected.
+# The engine lives under app/src/torrent/** but is built as a SEPARATE target
+# (see torrent/CMakeLists.txt), never linked into the app yet — integration into
+# resolvePlayback/streamToMedia is a later, gated step. We therefore ALWAYS carve
+# its sources out of the app GLOB, so nothing changes for the app whether the
+# option is ON or OFF.
+option(ENABLE_TORRENT "Build the on-device torrent streaming engine + PoC (separate target)" OFF)
+
 # setting src and include
 file(GLOB_RECURSE MAIN_SRC "${PROJECT_SOURCE_DIR}/app/src/*.cpp")
+list(FILTER MAIN_SRC EXCLUDE REGEX "/app/src/torrent/")
 if (PLATFORM_SWITCH)
     # System service initialization functions required for libnx
     list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
@@ -233,7 +243,15 @@ endif ()
 
 if (USE_LIBUSBHSFS)
     find_library(USBHSFS_LIB NAMES usbhsfs REQUIRED)
-    list(APPEND APP_PLATFORM_LIB lwext4 ntfs-3g usbhsfs)
+    # libusbhsfs référence des symboles ext4_*/ntfs_* définis dans lwext4 et
+    # ntfs-3g (pilotes de systèmes de fichiers). En lien statique mono-passe, la
+    # lib qui RÉFÉRENCE doit précéder celles qui DÉFINISSENT ; l'ordre historique
+    # (définisseurs d'abord) ne résolvait que parce que --gc-sections écartait le
+    # code de montage FS non atteint. L'intégration torrent a modifié le link et
+    # fait ressortir les undefined ext4_/ntfs_. On regroupe les trois libs
+    # interdépendantes dans un --start-group/--end-group : résolution multi-passe,
+    # indépendante de l'ordre, que ENABLE_TORRENT soit ON ou OFF.
+    list(APPEND APP_PLATFORM_LIB -Wl,--start-group lwext4 ntfs-3g usbhsfs -Wl,--end-group)
     list(APPEND APP_PLATFORM_OPTION -DUSE_LIBUSBHSFS)
 endif ()
 
@@ -365,4 +383,34 @@ elseif (PLATFORM_PS4)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/ps4/sce_sys/about ${CMAKE_BINARY_DIR}/ps4/sce_sys/about
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/ps4/resources
     )
+endif ()
+
+# Optional: build the torrent engine + PoC as a separate target tree, and wire the
+# engine into the app on every platform (the socket shim covers desktop, Switch,
+# Vita and PS4 — see app/include/torrent/socket.hpp). Off by default.
+if (ENABLE_TORRENT)
+    message(STATUS "ENABLE_TORRENT=ON — building torrent engine + PoC (separate target)")
+    add_subdirectory(torrent)
+
+    # App integration: link the engine into the app and turn on the gated playback
+    # path (resolvePlayback -> local HTTP URL, source UI, live buffering overlay,
+    # teardown). Integrated on ALL FOUR platforms — the socket shim covers every
+    # target and torrent/CMakeLists resolves curl/mbedtls from each toolchain:
+    #   - Desktop : POSIX/winsock sockets, find_package(CURL) + system SHA-1.
+    #   - Switch  : libnx `bsd` sockets (socket.cpp #if __SWITCH__), switch-curl +
+    #               mbedcrypto (SHA-1) via pkg-config.                    [verified]
+    #   - Vita    : SceNet rewrite (socket.cpp #elif __vita__), vita curl +
+    #               mbedcrypto via pkg-config; DHT is opt-in here (types.hpp).
+    #   - PS4     : openorbis FreeBSD BSD sockets (socket.cpp POSIX #else),
+    #               find_package(CURL) + mbedcrypto (SHA-1).
+    # The integration is unconditional inside this if(ENABLE_TORRENT) block: every
+    # integration site is behind `#if defined(ENABLE_TORRENT)`, so with the option
+    # OFF everywhere (the default) the app is byte-for-byte unchanged — ENABLE_TORRENT
+    # is defined for the app ONLY here. The bridge glue (session.cpp) lives under
+    # app/src/torrent/ — already carved out of the app GLOB — and is added to the app
+    # target explicitly so it never enters a non-integrated build.
+    message(STATUS "ENABLE_TORRENT — integrating torrent playback into the app")
+    target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/app/src/torrent/session.cpp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE torrent_engine)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_TORRENT)
 endif ()

@@ -644,6 +644,11 @@ void VideoView::registerMpvEvent() {
             this->playIndexEvent.fire(++this->playIndex);
             break;
         case MpvEventEnum::CACHE_SPEED_CHANGE:
+#if defined(ENABLE_TORRENT)
+            // A latched torrent buffering message owns the center label; don't let
+            // the mpv cache-speed writer clobber it.
+            if (this->centerMessageLatched) break;
+#endif
             // 仅当加载圈已经开始转起的情况显示缓存
             if (this->osdCenterBox->getVisibility() != brls::Visibility::GONE) {
                 if (this->centerLabel->getVisibility() != brls::Visibility::VISIBLE)
@@ -684,10 +689,35 @@ void VideoView::unRegisterMpvEvent() {
 
 // Loading
 void VideoView::showLoading() {
-    this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
+#if defined(ENABLE_TORRENT)
+    // Keep a latched torrent buffering message visible across mpv's LOADING_START
+    // (which fires once resolvePlayback hands mpv the local torrent HTTP URL).
+    if (!this->centerMessageLatched)
+#endif
+        this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
     this->osdCenterBox->setVisibility(brls::Visibility::VISIBLE);
     disableDimming(false);
 }
+
+#if defined(ENABLE_TORRENT)
+// Torrent buffering: show/refresh the central loading box (spinner + label) with a
+// live P2P status line. Forces the center box visible so it shows for the whole
+// resolvePlayback + buffering window, and latches the label so showLoading() and
+// the cache-speed writer leave it alone until cleared.
+void VideoView::setCenterLoadingMessage(const std::string& text) {
+    this->centerMessageLatched = true;
+    this->osdCenterBox->setVisibility(brls::Visibility::VISIBLE);
+    this->centerLabel->setVisibility(brls::Visibility::VISIBLE);
+    this->centerLabel->setText(text);
+}
+
+// Release the latch and hide the label; the center box itself is retired by the
+// normal LOADING_END -> hideLoading() path (unchanged), so playback proceeds as usual.
+void VideoView::clearCenterLoadingMessage() {
+    this->centerMessageLatched = false;
+    this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
+}
+#endif
 
 void VideoView::hideLoading(bool dimming) {
     this->osdCenterBox->setVisibility(brls::Visibility::GONE);
