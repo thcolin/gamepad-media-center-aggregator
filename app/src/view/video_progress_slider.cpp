@@ -34,7 +34,7 @@ VideoProgressSlider::VideoProgressSlider() {
     pointer->setHighlightCornerRadius(21);
     pointer->setHighlightPadding(6);
     pointer->setHideHighlightBorder(true);
-    pointer->setHighlightBackgroundColor(Application::getTheme().getColor("color/focus/bg"));
+    pointer->setHighlightBackgroundColor(brls::Application::getTheme().getColor("color/focus/bg"));
     pointer->setHideClickAnimation(true);
     pointer->setAlignItems(brls::AlignItems::CENTER);
     pointer->setJustifyContent(brls::JustifyContent::CENTER);
@@ -54,8 +54,6 @@ VideoProgressSlider::VideoProgressSlider() {
     pointer->addGestureRecognizer(new brls::PanGestureRecognizer(
         [this](brls::PanGestureStatus status, brls::Sound* soundToPlay) {
             brls::Application::giveFocus(pointer);
-
-            lastProgress = progress;
 
             if (status.state == brls::GestureState::UNSURE) {
                 *soundToPlay = brls::SOUND_FOCUS_CHANGE;
