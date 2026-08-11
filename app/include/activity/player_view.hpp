@@ -44,7 +44,9 @@ private:
     /// which decides direct vs transcode internally). forceDirect bypasses
     /// transcoding for the direct-play fallback after a transcode playback error
     /// (helps the Vita hardware decoder, which can choke on the transcoded stream).
-    void startPlayback(const int64_t seekMs, bool forceDirect = false);
+    /// forceBitrate (bps, 0 = user setting) caps the stream for the
+    /// transcode fallback after a direct-play error.
+    void startPlayback(const int64_t seekMs, bool forceDirect = false, int64_t forceBitrate = 0);
     /// Tears the current Plex transcode session down server-side (no-op for
     /// direct play or non-Plex backends). Fire-and-forget; safe to call after
     /// `this` is gone.
@@ -53,6 +55,11 @@ private:
     /// where the hardware decoder can choke on the transcoded stream). Returns
     /// true when a fallback was started (so the error dialog is suppressed).
     bool tryDirectPlayFallback();
+    /// Mirror image: on a direct-play error, retry once through the server
+    /// transcoder (issue #50 — a server may refuse to serve the raw part, e.g.
+    /// Plex remote/relay, while a transcode session opens fine). Returns true
+    /// when a fallback was started (so the error dialog is suppressed).
+    bool tryTranscodeFallback();
     bool playIndex(int index);
     /// Resolves external subtitle sidecars for the current item through the
     /// backend (Stremio addons), lazily and only when the played item changes.
@@ -86,8 +93,12 @@ private:
     int preferredVersion = -1;
     bool scrobbled = false;
     /// guards tryDirectPlayFallback so a failing stream falls back at most once
-    /// per (re)load; reset by playMedia on every deliberate (re)start
+    /// per (re)load; reset by playMedia on every deliberate (re)start. Each
+    /// fallback direction sets BOTH flags: a source that already failed is
+    /// never retried (direct -> transcode -> direct again would be pointless).
     bool directPlayFallback = false;
+    /// same guard for tryTranscodeFallback (direct play -> transcode)
+    bool transcodeFallback = false;
     std::vector<plex::Item> episodes;
 
     /// External subtitle sidecars (Stremio addons) for the current item, resolved

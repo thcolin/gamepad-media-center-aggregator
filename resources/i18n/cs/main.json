@@ -49,6 +49,7 @@
     "next": "Další",
     "error": "Chyba přehrávání",
     "direct_fallback": "Překódování selhalo, přímé přehrávání",
+    "transcode_fallback": "Přímé přehrávání selhalo, překódování",
     "episode": "Epizoda",
     "speed_up": "Aktuální rychlost {}"
   },

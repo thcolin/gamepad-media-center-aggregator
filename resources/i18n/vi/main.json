@@ -49,6 +49,7 @@
     "next": "Sau",
     "error": "Lỗi trong khi phát",
     "direct_fallback": "Chuyển mã thất bại, đang phát trực tiếp",
+    "transcode_fallback": "Phát trực tiếp thất bại, đang chuyển mã",
     "episode": "Tập",
     "speed_up": "Tốc độ hiện tại {}"
   },
