@@ -49,6 +49,7 @@
     "next": "Sonraki",
     "error": "Oynatma hatası",
     "direct_fallback": "Kod dönüştürme başarısız, doğrudan oynatılıyor",
+    "transcode_fallback": "Doğrudan oynatma başarısız, kod dönüştürülüyor",
     "episode": "Bölümler",
     "speed_up": "Mevcut hız {}"
   },

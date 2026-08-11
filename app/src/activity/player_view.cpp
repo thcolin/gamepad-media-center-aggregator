@@ -50,9 +50,13 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
         PlayerSetting::showAudioMenu(&this->stream);
         return true;
     });
-    // transcode stream failed to play -> retry once in direct play before the
-    // error dialog (Vita hardware decode can reject the transcoded stream)
-    view->registerError([this](...) { return this->tryDirectPlayFallback(); });
+    // playback failed -> try the other delivery path once before the error
+    // dialog: a failed transcode retries in direct play (Vita hardware decode
+    // can reject the transcoded stream), a failed direct play retries through
+    // the server transcoder (issue #50: a server may refuse the raw part —
+    // Plex remote/relay — while a transcode session opens fine)
+    view->registerError(
+        [this](...) { return this->tryDirectPlayFallback() || this->tryTranscodeFallback(); });
 
     // stable session identifier (24 characters)
     this->sessionId = misc::randHex(12);
@@ -224,8 +228,9 @@ void PlayerView::playMedia(const int64_t seekMs) {
     // Without it each reload orphaned a server-side session (verified on dev:
     // they stack up at ~0% progress and never free), starving new transcodes.
     this->stopTranscode();
-    // deliberate (re)start: allow the direct-play fallback to trigger again
+    // deliberate (re)start: allow the playback fallbacks to trigger again
     this->directPlayFallback = false;
+    this->transcodeFallback = false;
 
     // Fast path: the caller already resolved the exact source (Stremio source
     // picker passes the fully-resolved item + chosen index). Re-fetching would
@@ -284,7 +289,7 @@ void PlayerView::playMedia(const int64_t seekMs) {
         });
 }
 
-void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect) {
+void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t forceBitrate) {
     // We are about to (re)load: mpv will drop any sub-add'ed tracks. Clear the
     // loaded flag so a subtitle fetch landing mid-load waits for MPV_LOADED to
     // re-add. (External subtitles are resolved AFTER the playback task is queued
@@ -293,7 +298,10 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect) {
 
     media::PlaybackOptions opts;
     opts.seekMs = seekMs;
-    opts.bitrateCap = MPVCore::VIDEO_QUALITY;
+    // forceBitrate: the direct-play->transcode fallback needs a cap even when
+    // the user setting is 0/auto (a cap is what routes resolvePlayback through
+    // the transcoder)
+    opts.bitrateCap = forceBitrate > 0 ? forceBitrate : MPVCore::VIDEO_QUALITY;
     // forceDirect: the transcode->direct-play fallback re-resolves with direct
     // play forced (resolvePlayback returns the direct source when set).
     opts.forceDirectPlay = MPVCore::FORCE_DIRECTPLAY || forceDirect;
@@ -411,7 +419,9 @@ bool PlayerView::tryDirectPlayFallback() {
     auto& mpv = MPVCore::instance();
     // only recover a failed transcode, and only once per (re)load
     if (this->playMethod != "transcode" || this->directPlayFallback) return false;
+    // the transcode just failed: never bounce back to it from this load
     this->directPlayFallback = true;
+    this->transcodeFallback = true;
 
     int64_t pos = int64_t(mpv.playback_time) * 1000;  // read before reset() zeroes it
     brls::Logger::error("PlayerView: transcode playback failed ({}) — falling back to direct play at {} ms",
@@ -421,6 +431,34 @@ bool PlayerView::tryDirectPlayFallback() {
     this->startPlayback(pos, /*forceDirect=*/true);  // re-resolve, forcing direct play
     // surface the reason to the user too, so bug reports carry the mpv code
     brls::Application::notify(fmt::format("{} ({})", "main/player/direct_fallback"_i18n, mpv.getError()));
+    return true;  // handled: no error dialog
+}
+
+bool PlayerView::tryTranscodeFallback() {
+    auto& mpv = MPVCore::instance();
+    // only recover a failed direct play, and only once per (re)load
+    if (this->playMethod != "directplay" || this->transcodeFallback) return false;
+    // an explicit user choice to direct play is respected, and the backend must
+    // have a transcoder (Stremio has none). Music is excluded: the Plex audio
+    // transcode path itself falls back to direct play on any doubt, so routing
+    // a failed direct play through it would just replay the same URL.
+    if (MPVCore::FORCE_DIRECTPLAY) return false;
+    if (!AppConfig::instance().backend().caps().transcode) return false;
+    if (this->item.type == media::mediaTypeTrack) return false;
+    // the direct play just failed: never bounce back to it from this load
+    this->transcodeFallback = true;
+    this->directPlayFallback = true;
+
+    int64_t pos = int64_t(mpv.playback_time) * 1000;  // read before reset() zeroes it
+    brls::Logger::error("PlayerView: direct playback failed ({}) — falling back to transcode at {} ms",
+        mpv.getError(), pos);
+    mpv.reset();
+    // 8 Mbps: a preset of the in-player quality menu (toggleQuality), high
+    // enough to keep 1080p watchable. Only this load is capped — the user's
+    // quality setting (VIDEO_QUALITY) is left untouched.
+    this->startPlayback(pos, /*forceDirect=*/false, /*forceBitrate=*/8000000);
+    // surface the reason to the user too, so bug reports carry the mpv code
+    brls::Application::notify(fmt::format("{} ({})", "main/player/transcode_fallback"_i18n, mpv.getError()));
     return true;  // handled: no error dialog
 }
 
