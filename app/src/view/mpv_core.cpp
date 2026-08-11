@@ -139,6 +139,14 @@ void MPVCore::init() {
     mpv_set_option_string(mpv, "gpu-shader-cache-dir", fmt::format("{}/cache", confDir).c_str());
     mpv_set_option_string(mpv, "ytdl", "no");
     mpv_set_option_string(mpv, "referrer", conf.getUrl().c_str());
+    // Same User-Agent as the app's own HTTP client (http.cpp): every server or
+    // middlebox sees one client instead of ffmpeg's default "Lavf/..." — the
+    // one request the app makes that would otherwise not look like the app
+    // (issue #50: download opens, direct play of the same URL fails to open).
+    // Per-remote overrides (client.cpp) still win as loadfile options.
+    mpv_set_option_string(mpv, "user-agent",
+        fmt::format("{}/{} ({})", AppVersion::getPackageName(), AppVersion::getVersion(), AppVersion::getPlatform())
+            .c_str());
     mpv_set_option_string(mpv, "osd-level", "0");
     mpv_set_option_string(mpv, "video-timing-offset", "0");  // 60fps
     mpv_set_option_string(mpv, "reset-on-next-file", "speed,pause");
