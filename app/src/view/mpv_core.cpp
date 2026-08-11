@@ -5,6 +5,7 @@
 #include "view/mpv_core.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
+#include <cstring>
 #include <fmt/ranges.h>
 
 static inline void check_error(int status) {
@@ -568,6 +569,11 @@ void MPVCore::draw(brls::Rect area, float alpha) {
 
 std::string MPVCore::getError() const {
     if (this->last_error == 0) return "";
+    // "mpv -13: loading failed" alone cannot be diagnosed (issue #50): append
+    // the captured ffmpeg/stream line that says WHY the load failed, when any
+    if (!this->last_error_detail.empty())
+        return fmt::format(
+            "mpv {}: {} — {}", this->last_error, mpv_error_string(this->last_error), this->last_error_detail);
     return fmt::format("mpv {}: {}", this->last_error, mpv_error_string(this->last_error));
 }
 
@@ -591,6 +597,24 @@ void MPVCore::eventMainLoop() {
             auto log = (mpv_event_log_message *)event->data;
             if (log->log_level <= MPV_LOG_LEVEL_ERROR) {
                 brls::Logger::error("{}: {}", log->prefix, log->text);
+                // keep the FIRST error of this load: with a network failure the
+                // root cause ("tcp: Failed to resolve...", "http: HTTP error
+                // 403...") comes first, the follow-ups are generic wrappers
+                if (this->last_error_detail.empty()) {
+                    std::string text = log->text;
+                    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+                    // ffmpeg errors may quote the URL: mask credentials before
+                    // this reaches the on-screen dialog (users post screenshots)
+                    for (const char *key : {"X-Plex-Token=", "api_key=", "token="}) {
+                        for (size_t pos = 0; (pos = text.find(key, pos)) != std::string::npos;) {
+                            pos += std::strlen(key);
+                            size_t end = text.find_first_of("&\"' \t", pos);
+                            text.replace(pos, (end == std::string::npos ? text.size() : end) - pos, "***");
+                            pos += 3;
+                        }
+                    }
+                    this->last_error_detail = fmt::format("{}: {}", log->prefix, text);
+                }
             } else if (log->log_level <= MPV_LOG_LEVEL_WARN) {
                 brls::Logger::warning("{}: {}", log->prefix, log->text);
             } else if (log->log_level <= MPV_LOG_LEVEL_INFO) {
@@ -612,6 +636,7 @@ void MPVCore::eventMainLoop() {
             break;
         case MPV_EVENT_START_FILE:
             // event 6: 开始加载文件
+            this->last_error_detail.clear();  // errors from a previous load are stale
             brls::Logger::info("MPVCore => EVENT_START_FILE");
             mpvCoreEvent.fire(MpvEventEnum::START_FILE);
             mpvCoreEvent.fire(MpvEventEnum::LOADING_START);

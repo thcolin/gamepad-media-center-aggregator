@@ -120,6 +120,11 @@ public:
     /// mpv error code of the last MPV_END_FILE_REASON_ERROR (0 = none). Kept so
     /// the OSD/error dialog can surface a concrete reason for bug reports.
     int last_error = 0;
+    /// First ERROR-level log line since the current load started ("prefix: text",
+    /// tokens masked). mpv error codes are too coarse (-13 covers every open
+    /// failure: DNS, TLS, HTTP 4xx...); this carries the underlying cause to the
+    /// playback-error dialog. Cleared on MPV_EVENT_START_FILE.
+    std::string last_error_detail;
 
     inline static bool DEBUG = false;
 
