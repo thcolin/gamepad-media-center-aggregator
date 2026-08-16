@@ -296,12 +296,19 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
     // — see the note at the end of this function.)
     this->mpvLoaded = false;
 
+    // remembered so the fallbacks can resume from here when the load fails
+    // before mpv ever plays (playback_time stays 0 on an open failure)
+    this->lastSeekMs = seekMs;
+
     media::PlaybackOptions opts;
     opts.seekMs = seekMs;
     // forceBitrate: the direct-play->transcode fallback needs a cap even when
     // the user setting is 0/auto (a cap is what routes resolvePlayback through
-    // the transcoder)
-    opts.bitrateCap = forceBitrate > 0 ? forceBitrate : MPVCore::VIDEO_QUALITY;
+    // the transcoder). fallbackBitrate keeps subsequent reloads of a rescued
+    // playback on the transcoder instead of retrying the doomed direct play.
+    opts.bitrateCap = forceBitrate > 0 ? forceBitrate
+                      : MPVCore::VIDEO_QUALITY > 0 ? MPVCore::VIDEO_QUALITY
+                                                   : this->fallbackBitrate;
     // forceDirect: the transcode->direct-play fallback re-resolves with direct
     // play forced (resolvePlayback returns the direct source when set).
     opts.forceDirectPlay = MPVCore::FORCE_DIRECTPLAY || forceDirect;
@@ -423,7 +430,10 @@ bool PlayerView::tryDirectPlayFallback() {
     this->directPlayFallback = true;
     this->transcodeFallback = true;
 
-    int64_t pos = int64_t(mpv.playback_time) * 1000;  // read before reset() zeroes it
+    // position: read before reset() zeroes it; an open failure never played, so
+    // playback_time is 0 — resume from the seek the failed load was asked for
+    int64_t pos = int64_t(mpv.playback_time) * 1000;
+    if (pos <= 0) pos = this->lastSeekMs;
     brls::Logger::error("PlayerView: transcode playback failed ({}) — falling back to direct play at {} ms",
         mpv.getError(), pos);
     mpv.reset();            // release the (Vita hardware) decoder held by the failed stream
@@ -449,14 +459,19 @@ bool PlayerView::tryTranscodeFallback() {
     this->transcodeFallback = true;
     this->directPlayFallback = true;
 
-    int64_t pos = int64_t(mpv.playback_time) * 1000;  // read before reset() zeroes it
+    // position: read before reset() zeroes it; an open failure never played, so
+    // playback_time is 0 — resume from the seek the failed load was asked for
+    int64_t pos = int64_t(mpv.playback_time) * 1000;
+    if (pos <= 0) pos = this->lastSeekMs;
     brls::Logger::error("PlayerView: direct playback failed ({}) — falling back to transcode at {} ms",
         mpv.getError(), pos);
     mpv.reset();
     // 8 Mbps: a preset of the in-player quality menu (toggleQuality), high
-    // enough to keep 1080p watchable. Only this load is capped — the user's
-    // quality setting (VIDEO_QUALITY) is left untouched.
-    this->startPlayback(pos, /*forceDirect=*/false, /*forceBitrate=*/8000000);
+    // enough to keep 1080p watchable. The user's quality setting is left
+    // untouched; the armed fallbackBitrate keeps later reloads (subtitle/audio
+    // switches, binge) on the transcoder instead of replaying the failure.
+    this->fallbackBitrate = 8000000;
+    this->startPlayback(pos, /*forceDirect=*/false, this->fallbackBitrate);
     // surface the reason to the user too, so bug reports carry the mpv code
     brls::Application::notify(fmt::format("{} ({})", "main/player/transcode_fallback"_i18n, mpv.getError()));
     return true;  // handled: no error dialog
@@ -515,11 +530,14 @@ bool PlayerView::toggleQuality() {
 
     brls::Dropdown* dropdown = new brls::Dropdown(
         "main/player/quality"_i18n, options,
-        [values](int selected) {
+        [this, values](int selected) {
             MPVCore::VIDEO_QUALITY = values[selected];
             // remember the choice across launches (Vita users had to re-lower
             // it every session otherwise — see config.cpp default)
             AppConfig::instance().setItem(AppConfig::PLAYER_VIDEO_QUALITY, MPVCore::VIDEO_QUALITY);
+            // an explicit choice outranks the armed transcode fallback: picking
+            // "auto" (0) retries direct play honestly on the next load
+            this->fallbackBitrate = 0;
             MPVCore::instance().getCustomEvent()->fire(QUALITY_CHANGE, nullptr);
             return true;
         },
