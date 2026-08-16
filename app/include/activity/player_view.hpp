@@ -99,6 +99,16 @@ private:
     bool directPlayFallback = false;
     /// same guard for tryTranscodeFallback (direct play -> transcode)
     bool transcodeFallback = false;
+    /// seekMs of the last startPlayback call. A load that fails to OPEN leaves
+    /// mpv playback_time at 0, so the fallbacks resume from this instead —
+    /// otherwise a track/quality switch mid-film restarts the movie (GH #50).
+    int64_t lastSeekMs = 0;
+    /// bitrate cap armed by tryTranscodeFallback (0 = none). Once the transcoder
+    /// rescued playback, later reloads (subtitle/audio switches, binge) skip the
+    /// doomed direct-play attempt instead of replaying fail -> toast -> fallback
+    /// on every stream edit. Cleared when the user explicitly picks a quality
+    /// (toggleQuality) — an explicit "auto" retries direct play honestly.
+    int64_t fallbackBitrate = 0;
     std::vector<plex::Item> episodes;
 
     /// External subtitle sidecars (Stremio addons) for the current item, resolved
