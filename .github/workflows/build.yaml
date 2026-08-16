@@ -196,7 +196,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.platform == 'psvita' || github.event_name != 'workflow_dispatch' }}
     container:
-      image: vitasdk/vitasdk:latest
+      # Pinned to the last known-good image: ":latest" moved to a non-Alpine
+      # base on 2026-08-16 ("apk: not found"), and the prebuilt vita-packages
+      # below were built against THIS toolchain anyway. Migrating to the new
+      # image base is a separate chore (revalidate the whole Vita build).
+      image: vitasdk/vitasdk@sha256:153cfef5666d8300a249c66cd9c65dd747427d4b2304f48ecc62062c581dde7b
     steps:
     - uses: actions/checkout@v6
       with:
