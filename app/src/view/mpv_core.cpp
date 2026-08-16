@@ -210,12 +210,18 @@ void MPVCore::init() {
         mpv_set_option_string(mpv, "hwdec", "no");
     }
 
+    // Log events at "error" level are ALWAYS requested: they feed
+    // last_error_detail, the underlying reason the playback-error dialog and
+    // the fallback toasts display. Gating this behind the debug modes left the
+    // dialog with a bare "mpv -13" exactly where it matters — on user devices
+    // (verified by the GH #50 field report: toast without the reason).
     if (MPVCore::DEBUG) {
         mpv_set_option_string(mpv, "terminal", "yes");
         //  mpv_set_option_string(mpv, "msg-level", "all=no");
         mpv_set_option_string(mpv, "msg-level", "all=v");
-    } else if (brls::Application::isDebuggingViewEnabled()) {
-        mpv_request_log_messages(mpv, "info");
+        mpv_request_log_messages(mpv, "error");
+    } else {
+        mpv_request_log_messages(mpv, brls::Application::isDebuggingViewEnabled() ? "info" : "error");
     }
 
 #if (defined(__APPLE__) || defined(__linux__) || defined(_WIN32)) && !defined(ANDROID)
