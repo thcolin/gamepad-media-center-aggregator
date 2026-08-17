@@ -49,6 +49,7 @@
     "next": "Siguiente",
     "error": "Error de reproducción",
     "direct_fallback": "Error de transcodificación, reproducción directa",
+    "transcode_fallback": "Error de reproducción directa, transcodificando",
     "episode": "Episodio",
     "speed_up": "Velocidad actual {}"
   },

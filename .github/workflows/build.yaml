@@ -170,7 +170,8 @@ jobs:
         git -C library/borealis apply --verbose ../../scripts/patches/borealis-fixes.patch
     - name: Update dependencies
       run: |
-        for pkg in musl-1.5-3 mbedtls-2.28.10-2 sdl2-2.0.18-19 libcurl-7.80.0-5 dav1d-1.5.3-1 ffmpeg-7.1.5-3 libmpv-0.36.0-2; do
+        # dav1d 1.5.3-1 -> 1.5.4-1: the pacbrew release dropped the 1.5.3 asset.
+        for pkg in musl-1.5-3 mbedtls-2.28.10-2 sdl2-2.0.18-19 libcurl-7.80.0-5 dav1d-1.5.4-1 ffmpeg-7.1.5-3 libmpv-0.36.0-2; do
           pacman --noconfirm -U $BASE_URL/ps4-openorbis-${pkg}-any.pkg.tar.gz
         done
         git config --system --add safe.directory $GITHUB_WORKSPACE
@@ -195,7 +196,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.platform == 'psvita' || github.event_name != 'workflow_dispatch' }}
     container:
-      image: vitasdk/vitasdk:latest
+      # Pinned to the last known-good image: ":latest" moved to a non-Alpine
+      # base on 2026-08-16 ("apk: not found"), and the prebuilt vita-packages
+      # below were built against THIS toolchain anyway. Migrating to the new
+      # image base is a separate chore (revalidate the whole Vita build).
+      image: vitasdk/vitasdk@sha256:153cfef5666d8300a249c66cd9c65dd747427d4b2304f48ecc62062c581dde7b
     steps:
     - uses: actions/checkout@v6
       with:
