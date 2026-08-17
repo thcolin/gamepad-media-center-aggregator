@@ -76,14 +76,14 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
         auto& mpv = MPVCore::instance();
         switch (event) {
         case MpvEventEnum::MPV_RESUME:
-            this->reportTimeline("playing", int64_t(mpv.video_progress) * 1000);
+            this->reportTimeline("playing", this->mediaTimeMs(mpv.video_progress));
             view->getProfile()->init(this->playMethod);
             break;
         case MpvEventEnum::MPV_PAUSE:
-            this->reportTimeline("paused", int64_t(mpv.video_progress) * 1000);
+            this->reportTimeline("paused", this->mediaTimeMs(mpv.video_progress));
             break;
         case MpvEventEnum::LOADING_END:
-            this->reportTimeline("playing", int64_t(mpv.playback_time) * 1000);
+            this->reportTimeline("playing", this->mediaTimeMs(mpv.playback_time));
             break;
         case MpvEventEnum::MPV_STOP:
             this->mpvLoaded = false;
@@ -110,8 +110,8 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
         case MpvEventEnum::UPDATE_PROGRESS:
             // report cadence: every 10 s
             if (mpv.video_progress % 10 == 0) {
-                this->reportTimeline("playing", int64_t(mpv.video_progress) * 1000);
-                this->maybeScrobble(int64_t(mpv.video_progress) * 1000);
+                this->reportTimeline("playing", this->mediaTimeMs(mpv.video_progress));
+                this->maybeScrobble(this->mediaTimeMs(mpv.video_progress));
             }
             break;
         default:;
@@ -126,7 +126,7 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
             // (Vita hardware) decoder pinned, so the switch stalled and then
             // failed with a playback error. Read the position before reset()
             // zeroes it so the new transcode resumes where we were.
-            int64_t pos = int64_t(MPVCore::instance().playback_time) * 1000;
+            int64_t pos = this->mediaTimeMs(MPVCore::instance().playback_time);
             MPVCore::instance().reset();
             this->playMedia(pos);
         } else if (event == "PreviousTrack") {
@@ -348,6 +348,10 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
                 // (Plex); empty for direct play or backends without a server
                 // transcode session, leaving stopTranscode a safe no-op.
                 this->transcodeSession = src.transcodeSession;
+                // mpv's clock is offset-relative on server-side-seeked transcodes
+                // (see PlaybackSource::timelineOffsetMs): remember the base so
+                // every position read from mpv can be made absolute again.
+                this->timelineOffsetMs = src.timelineOffsetMs;
                 MPVCore::instance().setUrl(src.url, src.mpvExtra);
             });
         } catch (const std::exception& ex) {
@@ -432,8 +436,7 @@ bool PlayerView::tryDirectPlayFallback() {
 
     // position: read before reset() zeroes it; an open failure never played, so
     // playback_time is 0 — resume from the seek the failed load was asked for
-    int64_t pos = int64_t(mpv.playback_time) * 1000;
-    if (pos <= 0) pos = this->lastSeekMs;
+    int64_t pos = mpv.playback_time > 0 ? this->mediaTimeMs(mpv.playback_time) : this->lastSeekMs;
     brls::Logger::error("PlayerView: transcode playback failed ({}) — falling back to direct play at {} ms",
         mpv.getError(), pos);
     mpv.reset();            // release the (Vita hardware) decoder held by the failed stream
@@ -461,8 +464,7 @@ bool PlayerView::tryTranscodeFallback() {
 
     // position: read before reset() zeroes it; an open failure never played, so
     // playback_time is 0 — resume from the seek the failed load was asked for
-    int64_t pos = int64_t(mpv.playback_time) * 1000;
-    if (pos <= 0) pos = this->lastSeekMs;
+    int64_t pos = mpv.playback_time > 0 ? this->mediaTimeMs(mpv.playback_time) : this->lastSeekMs;
     brls::Logger::error("PlayerView: direct playback failed ({}) — falling back to transcode at {} ms",
         mpv.getError(), pos);
     mpv.reset();
@@ -495,7 +497,7 @@ void PlayerView::reportTimeline(const std::string& state, int64_t timeMs) {
 }
 
 void PlayerView::reportStop() {
-    int64_t timeMs = int64_t(MPVCore::instance().playback_time) * 1000;
+    int64_t timeMs = this->mediaTimeMs(MPVCore::instance().playback_time);
     this->reportTimeline("stopped", timeMs);
     this->maybeScrobble(timeMs);
     brls::Logger::debug("PlayerView reportStop {}", this->sessionId);

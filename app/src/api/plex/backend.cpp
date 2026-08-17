@@ -360,7 +360,8 @@ media::PlaybackSource PlexBackend::resolvePlayback(
         std::string aextra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
         if (HTTP::PROXY_STATUS) aextra += fmt::format(",http-proxy=\"{}\"", HTTP::PROXY);
         std::string aplay = conf.getUrl() + fmt::format(fmt::runtime(apiMusicTranscodeStart), aquery);
-        return {aplay, aextra, true, "transcode", audioSession};
+        // server-side offset: mpv's clock starts at 0 there (timelineOffsetMs)
+        return {aplay, aextra, true, "transcode", audioSession, opts.seekMs};
     }
 
     std::string session = misc::randHex(12);  // transcoder session: regenerated on every start
@@ -446,7 +447,8 @@ media::PlaybackSource PlexBackend::resolvePlayback(
     std::string extra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += fmt::format(",http-proxy=\"{}\"", HTTP::PROXY);
     std::string play = conf.getUrl() + "/video/:/transcode/universal/start.m3u8?" + query;
-    return {play, extra, true, "transcode", session};
+    // server-side offset: mpv's clock starts at 0 there (timelineOffsetMs)
+    return {play, extra, true, "transcode", session, opts.seekMs};
 }
 
 std::string PlexBackend::subtitleSidecarUrl(const std::string& streamKey) const {

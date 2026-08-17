@@ -103,6 +103,13 @@ private:
     /// mpv playback_time at 0, so the fallbacks resume from this instead —
     /// otherwise a track/quality switch mid-film restarts the movie (GH #50).
     int64_t lastSeekMs = 0;
+    /// Media time at mpv playback-time 0 for the current load (see
+    /// PlaybackSource::timelineOffsetMs — HLS transcodes started at an offset
+    /// rebase mpv's clock to 0). Every position read from mpv goes through
+    /// mediaTimeMs() so reload positions and server progress reports stay
+    /// absolute (GH #50: enabling subtitles restarted the movie).
+    int64_t timelineOffsetMs = 0;
+    int64_t mediaTimeMs(double mpvTimeSec) const { return this->timelineOffsetMs + int64_t(mpvTimeSec) * 1000; }
     /// bitrate cap armed by tryTranscodeFallback (0 = none). Once the transcoder
     /// rescued playback, later reloads (subtitle/audio switches, binge) skip the
     /// doomed direct-play attempt instead of replaying fail -> toast -> fallback

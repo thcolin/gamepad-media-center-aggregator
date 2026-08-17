@@ -520,7 +520,8 @@ media::PlaybackSource JellyfinBackend::resolvePlayback(
     }
     if (opts.seekMs > 0) form["StartTimeTicks"] = std::to_string(opts.seekMs * TICKS_PER_MS);
     std::string url = base() + fmt::format(fmt::runtime(apiVideoMaster), item.ratingKey, HTTP::encode_form(form));
-    return {url, extra().str(), true, "transcode"};
+    // server-side offset (StartTimeTicks): mpv's clock starts at 0 there
+    return {url, extra().str(), true, "transcode", "", opts.seekMs};
 }
 
 std::string JellyfinBackend::subtitleSidecarUrl(const std::string& streamKey) const {
