@@ -294,7 +294,12 @@ media::PlaybackSource PlexBackend::directSource(const media::Media& version, int
     if (seekMs > 0) ssextra << ",start=" << misc::sec2Time(seekMs / 1000);
     if (HTTP::PROXY_STATUS) ssextra << ",http-proxy=\"" << HTTP::PROXY << "\"";
     const media::Part& part = version.parts.front();
-    std::string url = withToken(conf.getUrl() + part.key, conf.getToken());
+    // download=1: the GH #50 field capture shows the bare part GET answered
+    // "HTTP error 500" over the Plex relay (…plex.direct:8443) while the same
+    // part with download=1 (the download path) goes through. Same bytes either
+    // way, and PMS keeps honoring Range requests (bench-verified: 206, ffmpeg
+    // opens and demuxes it), so mpv can stream and seek it unchanged.
+    std::string url = withToken(conf.getUrl() + part.key + "?download=1", conf.getToken());
     return {url, ssextra.str(), false, "directplay"};
 }
 
