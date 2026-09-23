@@ -53,8 +53,9 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
     // playback failed -> try the other delivery path once before the error
     // dialog (Vita hardware decode can reject a transcoded stream, a server
     // can refuse the raw part)
-    view->registerError(
-        [this](...) { return this->tryDirectPlayFallback() || this->tryTranscodeFallback(); });
+    view->registerError([this](...) {
+        return this->tryDirectPlayFallback() || this->tryPlainUrlFallback() || this->tryTranscodeFallback();
+    });
 
     // stable session identifier (24 characters)
     this->sessionId = misc::randHex(12);
@@ -306,6 +307,7 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
     // forceDirect: the transcode->direct-play fallback re-resolves with direct
     // play forced (resolvePlayback returns the direct source when set).
     opts.forceDirectPlay = MPVCore::FORCE_DIRECTPLAY || forceDirect;
+    opts.plainPartUrl = this->plainPartUrl;
     opts.audioStreamId = PlayerSetting::selectedAudio;
     opts.subtitleStreamId = PlayerSetting::selectedSubtitle;
     opts.burnSubtitles = PlayerSetting::selectedSubtitle > 0;
@@ -432,6 +434,22 @@ bool PlayerView::tryDirectPlayFallback() {
     this->stopTranscode();  // drop the dead transcode session server-side
     this->startPlayback(pos, /*forceDirect=*/true);  // re-resolve, forcing direct play
     brls::Application::notify(fmt::format("{} ({})", "main/player/direct_fallback"_i18n, mpv.getError()));
+    return true;  // handled: no error dialog
+}
+
+bool PlayerView::tryPlainUrlFallback() {
+    auto& mpv = MPVCore::instance();
+    if (this->playMethod != "directplay" || this->plainPartUrl) return false;
+    if (AppConfig::instance().backend().type() != media::BackendType::Plex) return false;
+    if (this->item.type == media::mediaTypeTrack) return false;
+    this->plainPartUrl = true;
+
+    // read before reset() zeroes it; an open failure leaves playback_time at 0
+    int64_t pos = mpv.playback_time > 0 ? this->mediaTimeMs(mpv.playback_time) : this->lastSeekMs;
+    brls::Logger::error("PlayerView: direct playback failed ({}) — retrying the bare part URL at {} ms",
+        mpv.getError(), pos);
+    mpv.reset();
+    this->startPlayback(pos, /*forceDirect=*/true);
     return true;  // handled: no error dialog
 }
 

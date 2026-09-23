@@ -63,6 +63,7 @@ struct PlaybackOptions {
     int64_t subtitleStreamId = 0;  // selected subtitle stream id (0 = none)
     int64_t bitrateCap = 0;        // bps cap; <= 0 = direct play / auto
     bool forceDirectPlay = false;
+    bool plainPartUrl = false;     // direct play on the bare part URL instead of the download one (Plex)
     bool burnSubtitles = false;
     std::string videoCodec = "h264";  // transcode target codec
     std::string sessionId;            // stable per-playback session id (X-Plex-Session-Identifier / PlaySessionId)

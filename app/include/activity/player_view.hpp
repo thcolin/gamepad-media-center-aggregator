@@ -59,6 +59,9 @@ private:
     /// server may refuse the raw part while a transcode session opens fine.
     /// Returns true when a fallback was started (so the error dialog is suppressed).
     bool tryTranscodeFallback();
+    /// On a Plex direct-play error, retry once on the bare part URL, silently:
+    /// a server may refuse ?download=1 to a user without download rights.
+    bool tryPlainUrlFallback();
     bool playIndex(int index);
     /// Resolves external subtitle sidecars for the current item through the
     /// backend (Stremio addons), lazily and only when the played item changes.
@@ -108,6 +111,8 @@ private:
     /// rescued playback, later reloads stay on it. Cleared when the user picks a
     /// quality (toggleQuality).
     int64_t fallbackBitrate = 0;
+    /// set by tryPlainUrlFallback: later reloads stay on the bare part URL
+    bool plainPartUrl = false;
     std::vector<plex::Item> episodes;
 
     /// External subtitle sidecars (Stremio addons) for the current item, resolved
