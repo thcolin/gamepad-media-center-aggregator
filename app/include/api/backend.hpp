@@ -76,12 +76,9 @@ struct PlaybackSource {
     std::string playMethod;   // "directplay" | "transcode"
     std::string transcodeSession;  // server-side transcode session token, to tear it down on reload/exit;
                                    // empty for direct play or backends without a server transcode session
-    /// Media time at mpv playback-time 0. Plex/Jellyfin HLS transcodes started
-    /// at an offset serve content from there but with timestamps rebased to 0
-    /// (bench-verified against PMS 1.43: content at 60s, mpv clock at 0), so
-    /// mpv's clock is offset-relative. Direct play seeks mpv-side (start=) and
-    /// stays absolute (leave 0). The player adds this to every position it
-    /// reads from mpv (progress reports, scrobble, reload positions — GH #50).
+    /// Media time at mpv playback-time 0. A Plex HLS transcode started at an
+    /// offset rebases its timestamps to 0; direct play and Jellyfin playlists
+    /// stay absolute (0). The player adds it to every position read from mpv.
     int64_t timelineOffsetMs = 0;
 };
 

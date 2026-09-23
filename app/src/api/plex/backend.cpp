@@ -288,19 +288,14 @@ void PlexBackend::markUnwatched(const std::string& id) {
 // ---- playback ------------------------------------------------------------------
 
 media::PlaybackSource PlexBackend::directSource(const media::Media& version, int64_t seekMs) const {
-    auto& conf = AppConfig::instance();
     std::stringstream ssextra;
     ssextra << fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
     if (seekMs > 0) ssextra << ",start=" << misc::sec2Time(seekMs / 1000);
     if (HTTP::PROXY_STATUS) ssextra << ",http-proxy=\"" << HTTP::PROXY << "\"";
     const media::Part& part = version.parts.front();
-    // download=1: the GH #50 field capture shows the bare part GET answered
-    // "HTTP error 500" over the Plex relay (…plex.direct:8443) while the same
-    // part with download=1 (the download path) goes through. Same bytes either
-    // way, and PMS keeps honoring Range requests (bench-verified: 206, ffmpeg
-    // opens and demuxes it), so mpv can stream and seek it unchanged.
-    std::string url = withToken(conf.getUrl() + part.key + "?download=1", conf.getToken());
-    return {url, ssextra.str(), false, "directplay"};
+    // the download URL: Plex Relay answers the bare part GET with HTTP 500 but
+    // serves ?download=1, with the same bytes and Range support
+    return {this->downloadUrl(part.key), ssextra.str(), false, "directplay"};
 }
 
 media::PlaybackSource PlexBackend::resolvePlayback(
@@ -365,8 +360,7 @@ media::PlaybackSource PlexBackend::resolvePlayback(
         std::string aextra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
         if (HTTP::PROXY_STATUS) aextra += fmt::format(",http-proxy=\"{}\"", HTTP::PROXY);
         std::string aplay = conf.getUrl() + fmt::format(fmt::runtime(apiMusicTranscodeStart), aquery);
-        // server-side offset: mpv's clock starts at 0 there (timelineOffsetMs)
-        return {aplay, aextra, true, "transcode", audioSession, opts.seekMs};
+        return {aplay, aextra, true, "transcode", audioSession};
     }
 
     std::string session = misc::randHex(12);  // transcoder session: regenerated on every start
@@ -445,15 +439,15 @@ media::PlaybackSource PlexBackend::resolvePlayback(
         throw std::runtime_error(fmt::format("{} ({})", "main/player/error"_i18n, general));
     }
     if (transcode == 1000) {
-        // the server refuses to transcode: direct play (no resume, as before)
-        return directSource(version, 0);
+        // the server refuses to transcode: direct play
+        return directSource(version, opts.seekMs);
     }
 
     std::string extra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += fmt::format(",http-proxy=\"{}\"", HTTP::PROXY);
     std::string play = conf.getUrl() + "/video/:/transcode/universal/start.m3u8?" + query;
-    // server-side offset: mpv's clock starts at 0 there (timelineOffsetMs)
-    return {play, extra, true, "transcode", session, opts.seekMs};
+    // server-side offset, in whole seconds like the offset sent: mpv's clock starts at 0 there
+    return {play, extra, true, "transcode", session, opts.seekMs / 1000 * 1000};
 }
 
 std::string PlexBackend::subtitleSidecarUrl(const std::string& streamKey) const {
