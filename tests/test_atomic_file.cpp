@@ -7,6 +7,7 @@
 // Runs on a real temp dir. The Switch fallback (rename refusing to replace an
 // existing file) cannot be reproduced here: desktop rename replaces.
 
+#include <sys/stat.h>
 #include <cstdio>
 #include <utils/atomic_file.hpp>
 
@@ -53,7 +54,19 @@ int main() {
     // cut between remove and rename (Switch fallback): the .tmp is picked up
     fs::rename(path, tmp);
     CHECK(AtomicFile::read(path, out) && out == "{\"a\":3}");
-    CHECK(fs::exists(path) && !fs::exists(tmp));
+    AtomicFile::write(path, out);
+    CHECK(slurp(path) == "{\"a\":3}" && !fs::exists(tmp));
+
+    // an existing but unopenable file must not read as absent
+    chmod(path.c_str(), 0);
+    bool threw = false;
+    try {
+        AtomicFile::read(path, out);
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    CHECK(threw);
+    chmod(path.c_str(), 0644);
 
     put(bak, "old");
     put(path, "{\"a\":");
@@ -61,7 +74,7 @@ int main() {
     CHECK(!fs::exists(path) && slurp(bak) == "{\"a\":");
 
     const std::string missing = (dir / "nope" / "config.json").string();
-    bool threw = false;
+    threw = false;
     try {
         AtomicFile::write(missing, "{}");
     } catch (const std::exception&) {

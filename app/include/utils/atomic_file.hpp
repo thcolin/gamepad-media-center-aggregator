@@ -39,13 +39,13 @@ inline void write(const std::string& path, const std::string& content) {
 }
 
 inline bool read(const std::string& path, std::string& out) {
-    const fs::path dst = toPath(path), tmp = toPath(path + ".tmp");
-    if (!fs::exists(dst)) {
-        if (!fs::exists(tmp)) return false;
-        fs::rename(tmp, dst);
+    fs::path src = toPath(path);
+    if (!fs::exists(src)) {
+        src = toPath(path + ".tmp");
+        if (!fs::exists(src)) return false;
     }
-    std::ifstream f(streamPath(dst), std::ios::binary);
-    if (!f.is_open()) return false;
+    std::ifstream f(streamPath(src), std::ios::binary);
+    if (!f.is_open()) throw std::runtime_error("cannot open " + src.string());
     std::stringstream ss;
     ss << f.rdbuf();
     out = ss.str();
