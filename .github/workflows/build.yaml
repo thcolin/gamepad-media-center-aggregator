@@ -34,7 +34,7 @@ on:
         type: boolean
 
 env:
-  # Prebuilt dependencies, mirrored from dragonflylee/switchfin (see RELEASING.md).
+  # Prebuilt dependencies, see RELEASING.md.
   DEPS_URL: https://github.com/thcolin/gamepad-media-center-aggregator/releases/download/ci-deps
 
 jobs:

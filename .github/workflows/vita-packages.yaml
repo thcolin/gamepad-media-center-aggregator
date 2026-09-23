@@ -35,4 +35,5 @@ jobs:
         tag_name: ci-deps
         prerelease: true
         make_latest: false
+        overwrite_files: false
         files: scripts/vita/curl/*.pkg.tar.xz

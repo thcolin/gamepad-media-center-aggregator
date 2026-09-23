@@ -92,7 +92,7 @@ To add or bump a package:
    ```sh
    R=thcolin/gamepad-media-center-aggregator
    gh release upload ci-deps -R $R <files>
-   gh release download ci-deps -R $R -D ci-deps
+   gh release download ci-deps -R $R -D ci-deps --clobber
    (cd ci-deps && rm SHA256SUMS && shasum -a 256 * > SHA256SUMS)
    gh release upload ci-deps -R $R --clobber ci-deps/SHA256SUMS
    ```
@@ -104,7 +104,9 @@ point at it.
 
 Vita curl is the one package we build ourselves (threaded resolver, see
 `scripts/vita/curl`). The `vita-packages` workflow rebuilds it and uploads it
-to `ci-deps` on manual dispatch; refresh `SHA256SUMS` afterwards.
+to `ci-deps` on manual dispatch. It never replaces an existing file: bump
+`pkgrel` in `scripts/vita/curl/VITABUILD` first, then point `build.yaml` at
+the new name and refresh `SHA256SUMS`.
 
 ## Notes
 
