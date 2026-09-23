@@ -475,6 +475,8 @@
       "uncached": "下载",
       "direct": "直链",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent：正在连接 P2P 网络…",
+      "torrent_peers": "{} 个节点",
       "link_badge": "链接",
       "torrents": "{} 个 Torrent 源 — 需要 debrid 服务",
       "links": "{} 个外部链接 — 无法在此播放",

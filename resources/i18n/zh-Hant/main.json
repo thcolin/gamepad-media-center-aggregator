@@ -475,6 +475,8 @@
       "uncached": "下載",
       "direct": "直連",
       "torrent_badge": "種子",
+      "torrent_buffering": "種子：正在連線至 P2P 網路…",
+      "torrent_peers": "{} 個節點",
       "link_badge": "連結",
       "torrents": "{} 個種子來源 — 需要解除限制服務",
       "links": "{} 個外部連結 — 此處無法播放",

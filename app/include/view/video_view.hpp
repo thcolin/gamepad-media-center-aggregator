@@ -70,6 +70,20 @@ public:
 
     void showOSD(bool autoHide = true);
 
+#if defined(ENABLE_TORRENT)
+    /// Torrent buffering feedback (torrent sources only). Drives the CENTRAL
+    /// loading box (spinner + centerLabel) with a live P2P status line. Unlike
+    /// showLoading() these may be called BEFORE mpv has the URL (during the
+    /// blocking resolvePlayback window), so the message covers the whole
+    /// metadata/peer-acquisition + buffering window. The message is "latched": the
+    /// normal LOADING_START reset and the cache-speed writer leave it alone until
+    /// clearCenterLoadingMessage(). Non-torrent playback never calls these, so the
+    /// central loading behaves exactly as before (byte-for-byte with ENABLE_TORRENT
+    /// OFF — the whole feature is compiled out).
+    void setCenterLoadingMessage(const std::string& text);
+    void clearCenterLoadingMessage();
+#endif
+
     static bool close(bool quit = false);
 
 private:
@@ -146,6 +160,12 @@ private:
     // OSD
     bool isOsdShown = false;
     bool isOsdLock = false;
+#if defined(ENABLE_TORRENT)
+    /// While true, centerLabel carries a torrent buffering message that the normal
+    /// loading/cache-speed logic must not overwrite (see setCenterLoadingMessage).
+    /// Always false in a non-torrent session -> unchanged central-loading behavior.
+    bool centerMessageLatched = false;
+#endif
     brls::Time osdLastShowTime = 0;
     brls::Time hintLastShowTime = 0;
     brls::Time profileLastShowTime = 0;

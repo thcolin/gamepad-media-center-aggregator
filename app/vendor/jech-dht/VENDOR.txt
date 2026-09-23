@@ -1,0 +1,18 @@
+jech/dht vendored from https://github.com/jech/dht
+Upstream commit: 0bbb8f4a5bd914b60de5e9fbb51573aa33a1cf18
+Retrieved: 2026-07-16
+License: MIT (see LICENCE)
+
+The reference mainline BitTorrent DHT (Kademlia, BEP-5) by Juliusz Chroboczek —
+the same implementation Transmission uses. Only the two sources needed to build
+the library are vendored (dht.c, dht.h) plus LICENCE and README. The upstream
+build files (Makefile, dht-example.c) are not vendored — GMCA builds dht.c through
+torrent/CMakeLists.txt instead. No source file was modified.
+
+This revision routes every outgoing datagram through the user-provided dht_sendto
+callback (dht.h) and never touches the socket fd directly — it only stores the fd
+as an opaque token and hands it back to dht_sendto. Reception is entirely the
+caller's job (feed datagrams to dht_periodic). GMCA therefore wires both I/O
+directions through torrent::net::UdpSocket (the platform shim), so dht.c compiles
+and runs unmodified on every target — the raw-fd portability caveat of older
+jech/dht revisions does not apply here.

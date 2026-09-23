@@ -475,6 +475,8 @@
       "uncached": "İndir",
       "direct": "Doğrudan",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: P2P ağına bağlanılıyor…",
+      "torrent_peers": "{} eş",
       "link_badge": "Bağlantı",
       "torrents": "{} torrent kaynağı — debrid gerekli",
       "links": "{} harici bağlantı — burada oynatılamıyor",

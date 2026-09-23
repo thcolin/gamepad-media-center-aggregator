@@ -475,6 +475,8 @@
       "uncached": "다운로드",
       "direct": "직접",
       "torrent_badge": "토렌트",
+      "torrent_buffering": "토렌트: P2P 네트워크에 연결 중…",
+      "torrent_peers": "피어 {}개",
       "link_badge": "링크",
       "torrents": "토렌트 소스 {}개 — 디브리드 필요",
       "links": "외부 링크 {}개 — 재생할 수 없음",

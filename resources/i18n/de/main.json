@@ -475,6 +475,8 @@
       "uncached": "Download",
       "direct": "Direkt",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: Verbindung zum P2P-Schwarm…",
+      "torrent_peers": "{} Peers",
       "link_badge": "Link",
       "torrents": "{} Torrent-Quelle(n) – Debrid erforderlich",
       "links": "{} externe(r) Link(s) – hier nicht abspielbar",

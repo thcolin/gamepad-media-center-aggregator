@@ -475,6 +475,8 @@
       "uncached": "Descargar",
       "direct": "Directo",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: conectando a la red P2P…",
+      "torrent_peers": "{} pares",
       "link_badge": "Enlace",
       "torrents": "{} fuente(s) torrent — se requiere debrid",
       "links": "{} enlace(s) externo(s) — no reproducible(s) aquí",

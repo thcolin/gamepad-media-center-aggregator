@@ -475,6 +475,8 @@
       "uncached": "Stáhnout",
       "direct": "Přímé",
       "torrent_badge": "Torrent",
+      "torrent_buffering": "Torrent: připojování k P2P síti…",
+      "torrent_peers": "{} peerů",
       "link_badge": "Odkaz",
       "torrents": "{} torrentových zdrojů — vyžaduje debrid",
       "links": "{} externí odkaz(y) — zde nelze přehrát",

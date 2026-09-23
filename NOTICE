@@ -12,6 +12,22 @@ miniz (library/miniz/)
   Public domain / MIT, by Rich Geldreich et al.
   https://github.com/richgel999/miniz — see library/miniz/LICENSE.
 
+libutp (app/vendor/libutp/)
+  MIT License, Copyright (c) 2010-2013 BitTorrent, Inc.
+  https://github.com/bittorrent/libutp — see app/vendor/libutp/LICENSE.
+  The reference µTP (uTorrent Transport Protocol, BEP-29) implementation, vendored
+  unmodified (upstream commit in app/vendor/libutp/VENDOR.txt) to provide the µTP
+  peer transport. Built as a separate static target by torrent/CMakeLists.txt.
+
+jech/dht (app/vendor/jech-dht/)
+  MIT License, Copyright (c) 2009-2011 by Juliusz Chroboczek.
+  https://github.com/jech/dht — see app/vendor/jech-dht/LICENCE.
+  The reference mainline BitTorrent DHT (Kademlia, BEP-5) — the same implementation
+  Transmission uses — vendored unmodified (upstream commit in
+  app/vendor/jech-dht/VENDOR.txt) to provide trackerless peer discovery. Built as a
+  separate static target by torrent/CMakeLists.txt; all socket I/O is routed through
+  the GMCA platform shim via the dht_sendto callback.
+
 PS Vita in-app self-update (app/src/utils/vita_install.cpp, issue #14)
   The technique used to install a homebrew VPK from within the app — forging a
   self-signed fake-package "head.bin" and promoting the extracted directory with
