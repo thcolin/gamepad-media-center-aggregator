@@ -5,6 +5,8 @@
 #include "view/mpv_core.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
+#include "utils/log_redact.hpp"
+#include "api/http.hpp"
 #include <cstring>
 #include <fmt/ranges.h>
 
@@ -139,14 +141,9 @@ void MPVCore::init() {
     mpv_set_option_string(mpv, "gpu-shader-cache-dir", fmt::format("{}/cache", confDir).c_str());
     mpv_set_option_string(mpv, "ytdl", "no");
     mpv_set_option_string(mpv, "referrer", conf.getUrl().c_str());
-    // Same User-Agent as the app's own HTTP client (http.cpp): every server or
-    // middlebox sees one client instead of ffmpeg's default "Lavf/..." — the
-    // one request the app makes that would otherwise not look like the app
-    // (issue #50: download opens, direct play of the same URL fails to open).
-    // Per-remote overrides (client.cpp) still win as loadfile options.
-    mpv_set_option_string(mpv, "user-agent",
-        fmt::format("{}/{} ({})", AppVersion::getPackageName(), AppVersion::getVersion(), AppVersion::getPlatform())
-            .c_str());
+    // the app's own User-Agent instead of ffmpeg's "Lavf/..."; per-remote
+    // overrides (client.cpp) still win as loadfile options
+    mpv_set_option_string(mpv, "user-agent", HTTP::default_user_agent().c_str());
     mpv_set_option_string(mpv, "osd-level", "0");
     mpv_set_option_string(mpv, "video-timing-offset", "0");  // 60fps
     mpv_set_option_string(mpv, "reset-on-next-file", "speed,pause");
@@ -210,12 +207,8 @@ void MPVCore::init() {
         mpv_set_option_string(mpv, "hwdec", "no");
     }
 
-    // Log events at "warn" level are ALWAYS requested: they feed the
-    // last_error/warn_line slots, the underlying reason the playback-error
-    // dialog and the fallback toasts display. Gating this behind the debug
-    // modes left the dialog with a bare "mpv -13" exactly where it matters —
-    // on user devices (verified by the GH #50 field report). "warn" and not
-    // "error": the Switch ffmpeg logs "https: HTTP error 500..." as a warning.
+    // "warn" in every mode: it feeds the reason shown by the playback-error
+    // dialog, and the Switch ffmpeg logs HTTP errors as warnings
     if (MPVCore::DEBUG) {
         mpv_set_option_string(mpv, "terminal", "yes");
         //  mpv_set_option_string(mpv, "msg-level", "all=no");
@@ -584,10 +577,8 @@ void MPVCore::draw(brls::Rect area, float alpha) {
 
 std::string MPVCore::getError() const {
     if (this->last_error == 0) return "";
-    // "mpv -13: loading failed" alone cannot be diagnosed (issue #50): append
-    // the captured ffmpeg/stream lines that say WHY the load failed, when any.
-    // The WARN line first (the cause: "https: HTTP error 500..."), then the
-    // ERROR line (the context: "stream: Failed to open <url>").
+    // the WARN line carries the cause ("https: HTTP error 500"), the ERROR
+    // line the context ("stream: Failed to open <url>")
     std::string detail = this->last_warn_line;
     if (!this->last_error_line.empty()) {
         if (!detail.empty()) detail += "; ";
@@ -616,31 +607,16 @@ void MPVCore::eventMainLoop() {
             return;
         case MPV_EVENT_LOG_MESSAGE: {
             auto log = (mpv_event_log_message *)event->data;
-            // keep the FIRST lines of this load: with a network failure the
-            // root cause ("https: HTTP error 500...") comes first, the
-            // follow-ups are generic wrappers. Trimmed, credentials masked
-            // before this reaches the on-screen dialog (users post screenshots).
+            // keep the FIRST lines since the load or the last restart: with a
+            // network failure the root cause comes first, then generic wrappers
             auto capture = [log](std::string &slot) {
-                if (!slot.empty()) return;
-                std::string text = log->text;
-                while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
-                for (const char *key : {"X-Plex-Token=", "api_key=", "token="}) {
-                    for (size_t pos = 0; (pos = text.find(key, pos)) != std::string::npos;) {
-                        pos += std::strlen(key);
-                        size_t end = text.find_first_of("&\"' \t", pos);
-                        text.replace(pos, (end == std::string::npos ? text.size() : end) - pos, "***");
-                        pos += 3;
-                    }
-                }
-                slot = fmt::format("{}: {}", log->prefix, text);
+                if (slot.empty()) slot = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
             };
             if (log->log_level <= MPV_LOG_LEVEL_ERROR) {
                 brls::Logger::error("{}: {}", log->prefix, log->text);
                 capture(this->last_error_line);
             } else if (log->log_level <= MPV_LOG_LEVEL_WARN) {
-                // network errors surface at WARN on some builds (Switch ffmpeg
-                // 7.1.5 logs "https: HTTP error 500..." as a warning)
-                if (std::strcmp(log->prefix, "ffmpeg") == 0 || std::strcmp(log->prefix, "stream") == 0)
+                if (std::strncmp(log->prefix, "ffmpeg", 6) == 0 || std::strcmp(log->prefix, "stream") == 0)
                     capture(this->last_warn_line);
                 brls::Logger::warning("{}: {}", log->prefix, log->text);
             } else if (log->log_level <= MPV_LOG_LEVEL_INFO) {
@@ -664,6 +640,7 @@ void MPVCore::eventMainLoop() {
             // event 6: 开始加载文件
             this->last_error_line.clear();  // errors from a previous load are stale
             this->last_warn_line.clear();
+            this->load_generation++;
             brls::Logger::info("MPVCore => EVENT_START_FILE");
             mpvCoreEvent.fire(MpvEventEnum::START_FILE);
             mpvCoreEvent.fire(MpvEventEnum::LOADING_START);
@@ -671,6 +648,8 @@ void MPVCore::eventMainLoop() {
         case MPV_EVENT_PLAYBACK_RESTART:
             // event 21: 开始播放文件（一般是播放或调整进度结束之后触发）
             brls::Logger::info("MPVCore => EVENT_PLAYBACK_RESTART");
+            this->last_error_line.clear();
+            this->last_warn_line.clear();
             this->video_stopped = false;
             if (this->isPaused())
                 mpvCoreEvent.fire(MpvEventEnum::MPV_PAUSE);
@@ -685,12 +664,11 @@ void MPVCore::eventMainLoop() {
                 this->last_error = node->error;
                 brls::Logger::error("MPVCore => FILE ERROR: {}", mpv_error_string(node->error));
                 this->stop();
-                // Deferred: mpv can queue END_FILE BEFORE the log lines that
-                // explain it (seen in the GH #50 capture: END_FILE at .909,
-                // "https: HTTP error 500" at .910). Firing straight away built
-                // the dialog/toast text before the reason slots were filled;
-                // 200 ms is imperceptible and lets the log events land first.
-                brls::delay(200, [this]() { mpvCoreEvent.fire(MpvEventEnum::MPV_FILE_ERROR); });
+                // deferred: mpv can queue END_FILE before the log lines that
+                // explain it
+                brls::delay(200, [this, gen = this->load_generation]() {
+                    if (gen == this->load_generation) mpvCoreEvent.fire(MpvEventEnum::MPV_FILE_ERROR);
+                });
             } else if (node->reason == MPV_END_FILE_REASON_EOF) {
                 brls::Logger::info("MPVCore => END_OF_FILE");
                 mpvCoreEvent.fire(MpvEventEnum::END_OF_FILE);

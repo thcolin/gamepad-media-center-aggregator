@@ -159,6 +159,8 @@ HTTP::~HTTP() {
     if (this->easy != nullptr) curl_easy_cleanup(this->easy);
 }
 
+const std::string& HTTP::default_user_agent() { return user_agent; }
+
 void HTTP::set_user_agent(const std::string& agent) { curl_easy_setopt(this->easy, CURLOPT_USERAGENT, agent.c_str()); }
 
 void HTTP::add_header(const std::string& header) { this->chunk = curl_slist_append(this->chunk, header.c_str()); }
