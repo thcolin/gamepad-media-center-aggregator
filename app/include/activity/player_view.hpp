@@ -44,7 +44,9 @@ private:
     /// which decides direct vs transcode internally). forceDirect bypasses
     /// transcoding for the direct-play fallback after a transcode playback error
     /// (helps the Vita hardware decoder, which can choke on the transcoded stream).
-    void startPlayback(const int64_t seekMs, bool forceDirect = false);
+    /// forceBitrate (bps, 0 = user setting) caps the stream for the
+    /// transcode fallback after a direct-play error.
+    void startPlayback(const int64_t seekMs, bool forceDirect = false, int64_t forceBitrate = 0);
     /// Tears the current Plex transcode session down server-side (no-op for
     /// direct play or non-Plex backends). Fire-and-forget; safe to call after
     /// `this` is gone.
@@ -53,6 +55,13 @@ private:
     /// where the hardware decoder can choke on the transcoded stream). Returns
     /// true when a fallback was started (so the error dialog is suppressed).
     bool tryDirectPlayFallback();
+    /// On a direct-play error, retry once through the server transcoder: a
+    /// server may refuse the raw part while a transcode session opens fine.
+    /// Returns true when a fallback was started (so the error dialog is suppressed).
+    bool tryTranscodeFallback();
+    /// On a Plex direct-play error, retry once on the bare part URL, silently:
+    /// a server may refuse ?download=1 to a user without download rights.
+    bool tryPlainUrlFallback();
     bool playIndex(int index);
     /// Resolves external subtitle sidecars for the current item through the
     /// backend (Stremio addons), lazily and only when the played item changes.
@@ -86,8 +95,24 @@ private:
     int preferredVersion = -1;
     bool scrobbled = false;
     /// guards tryDirectPlayFallback so a failing stream falls back at most once
-    /// per (re)load; reset by playMedia on every deliberate (re)start
+    /// per (re)load; reset by playMedia on every deliberate (re)start. Each
+    /// fallback sets both flags, so a source that already failed is never retried.
     bool directPlayFallback = false;
+    /// same guard for tryTranscodeFallback (direct play -> transcode)
+    bool transcodeFallback = false;
+    /// seekMs of the last startPlayback call: a load that fails to open leaves
+    /// mpv playback_time at 0, so the fallbacks resume from this instead.
+    int64_t lastSeekMs = 0;
+    /// PlaybackSource::timelineOffsetMs of the current load; every position
+    /// read from mpv goes through mediaTimeMs().
+    int64_t timelineOffsetMs = 0;
+    int64_t mediaTimeMs(double mpvTimeSec) const { return this->timelineOffsetMs + int64_t(mpvTimeSec) * 1000; }
+    /// bitrate cap armed by tryTranscodeFallback (0 = none): once the transcoder
+    /// rescued playback, later reloads stay on it. Cleared when the user picks a
+    /// quality (toggleQuality).
+    int64_t fallbackBitrate = 0;
+    /// set by tryPlainUrlFallback: later reloads stay on the bare part URL
+    bool plainPartUrl = false;
     std::vector<plex::Item> episodes;
 
     /// External subtitle sidecars (Stremio addons) for the current item, resolved

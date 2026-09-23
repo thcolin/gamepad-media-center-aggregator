@@ -62,6 +62,7 @@ public:
     std::string _post(const std::string& url, const std::string& data);
     std::string _put(const std::string& url, const std::string& data);
     void set_user_agent(const std::string& agent);
+    static const std::string& default_user_agent();
     void set_basic_auth(const std::string& user, const std::string& passwd);
     void _delete(const std::string& url, std::ostream* out);
 

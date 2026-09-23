@@ -5,6 +5,9 @@
 #include "view/mpv_core.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
+#include "utils/log_redact.hpp"
+#include "api/http.hpp"
+#include <cstring>
 #include <fmt/ranges.h>
 
 static inline void check_error(int status) {
@@ -138,6 +141,9 @@ void MPVCore::init() {
     mpv_set_option_string(mpv, "gpu-shader-cache-dir", fmt::format("{}/cache", confDir).c_str());
     mpv_set_option_string(mpv, "ytdl", "no");
     mpv_set_option_string(mpv, "referrer", conf.getUrl().c_str());
+    // the app's own User-Agent instead of ffmpeg's "Lavf/..."; per-remote
+    // overrides (client.cpp) still win as loadfile options
+    mpv_set_option_string(mpv, "user-agent", HTTP::default_user_agent().c_str());
     mpv_set_option_string(mpv, "osd-level", "0");
     mpv_set_option_string(mpv, "video-timing-offset", "0");  // 60fps
     mpv_set_option_string(mpv, "reset-on-next-file", "speed,pause");
@@ -201,12 +207,15 @@ void MPVCore::init() {
         mpv_set_option_string(mpv, "hwdec", "no");
     }
 
+    // "warn" in every mode: it feeds the reason shown by the playback-error
+    // dialog, and the Switch ffmpeg logs HTTP errors as warnings
     if (MPVCore::DEBUG) {
         mpv_set_option_string(mpv, "terminal", "yes");
         //  mpv_set_option_string(mpv, "msg-level", "all=no");
         mpv_set_option_string(mpv, "msg-level", "all=v");
-    } else if (brls::Application::isDebuggingViewEnabled()) {
-        mpv_request_log_messages(mpv, "info");
+        mpv_request_log_messages(mpv, "warn");
+    } else {
+        mpv_request_log_messages(mpv, brls::Application::isDebuggingViewEnabled() ? "info" : "warn");
     }
 
 #if (defined(__APPLE__) || defined(__linux__) || defined(_WIN32)) && !defined(ANDROID)
@@ -568,6 +577,15 @@ void MPVCore::draw(brls::Rect area, float alpha) {
 
 std::string MPVCore::getError() const {
     if (this->last_error == 0) return "";
+    // the WARN line carries the cause ("https: HTTP error 500"), the ERROR
+    // line the context ("stream: Failed to open <url>")
+    std::string detail = this->last_warn_line;
+    if (!this->last_error_line.empty()) {
+        if (!detail.empty()) detail += "; ";
+        detail += this->last_error_line;
+    }
+    if (!detail.empty())
+        return fmt::format("mpv {}: {} — {}", this->last_error, mpv_error_string(this->last_error), detail);
     return fmt::format("mpv {}: {}", this->last_error, mpv_error_string(this->last_error));
 }
 
@@ -589,10 +607,18 @@ void MPVCore::eventMainLoop() {
             return;
         case MPV_EVENT_LOG_MESSAGE: {
             auto log = (mpv_event_log_message *)event->data;
+            // keep the FIRST lines since the load or the last restart: with a
+            // network failure the root cause comes first, then generic wrappers
             if (log->log_level <= MPV_LOG_LEVEL_ERROR) {
-                brls::Logger::error("{}: {}", log->prefix, log->text);
+                std::string line = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
+                brls::Logger::error("{}", line);
+                if (this->last_error_line.empty()) this->last_error_line = line;
             } else if (log->log_level <= MPV_LOG_LEVEL_WARN) {
-                brls::Logger::warning("{}: {}", log->prefix, log->text);
+                std::string line = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
+                if (this->last_warn_line.empty() &&
+                    (std::strncmp(log->prefix, "ffmpeg", 6) == 0 || std::strcmp(log->prefix, "stream") == 0))
+                    this->last_warn_line = line;
+                brls::Logger::warning("{}", line);
             } else if (log->log_level <= MPV_LOG_LEVEL_INFO) {
                 brls::Logger::info("{}: {}", log->prefix, log->text);
             } else if (log->log_level <= MPV_LOG_LEVEL_V) {
@@ -612,6 +638,9 @@ void MPVCore::eventMainLoop() {
             break;
         case MPV_EVENT_START_FILE:
             // event 6: 开始加载文件
+            this->last_error_line.clear();  // errors from a previous load are stale
+            this->last_warn_line.clear();
+            this->load_generation++;
             brls::Logger::info("MPVCore => EVENT_START_FILE");
             mpvCoreEvent.fire(MpvEventEnum::START_FILE);
             mpvCoreEvent.fire(MpvEventEnum::LOADING_START);
@@ -619,6 +648,8 @@ void MPVCore::eventMainLoop() {
         case MPV_EVENT_PLAYBACK_RESTART:
             // event 21: 开始播放文件（一般是播放或调整进度结束之后触发）
             brls::Logger::info("MPVCore => EVENT_PLAYBACK_RESTART");
+            this->last_error_line.clear();
+            this->last_warn_line.clear();
             this->video_stopped = false;
             if (this->isPaused())
                 mpvCoreEvent.fire(MpvEventEnum::MPV_PAUSE);
@@ -633,7 +664,11 @@ void MPVCore::eventMainLoop() {
                 this->last_error = node->error;
                 brls::Logger::error("MPVCore => FILE ERROR: {}", mpv_error_string(node->error));
                 this->stop();
-                mpvCoreEvent.fire(MpvEventEnum::MPV_FILE_ERROR);
+                // deferred: mpv can queue END_FILE before the log lines that
+                // explain it
+                brls::delay(200, [this, gen = this->load_generation]() {
+                    if (gen == this->load_generation) mpvCoreEvent.fire(MpvEventEnum::MPV_FILE_ERROR);
+                });
             } else if (node->reason == MPV_END_FILE_REASON_EOF) {
                 brls::Logger::info("MPVCore => END_OF_FILE");
                 mpvCoreEvent.fire(MpvEventEnum::END_OF_FILE);

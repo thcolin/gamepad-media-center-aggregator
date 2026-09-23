@@ -287,22 +287,27 @@ void PlexBackend::markUnwatched(const std::string& id) {
 
 // ---- playback ------------------------------------------------------------------
 
-media::PlaybackSource PlexBackend::directSource(const media::Media& version, int64_t seekMs) const {
+media::PlaybackSource PlexBackend::directSource(const media::Media& version, int64_t seekMs, bool download) const {
     auto& conf = AppConfig::instance();
     std::stringstream ssextra;
     ssextra << fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
     if (seekMs > 0) ssextra << ",start=" << misc::sec2Time(seekMs / 1000);
     if (HTTP::PROXY_STATUS) ssextra << ",http-proxy=\"" << HTTP::PROXY << "\"";
     const media::Part& part = version.parts.front();
-    std::string url = withToken(conf.getUrl() + part.key, conf.getToken());
+    // the download URL: Plex Relay answers the bare part GET with HTTP 500 but
+    // serves ?download=1, with the same bytes and Range support
+    std::string url = download ? this->downloadUrl(part.key) : withToken(conf.getUrl() + part.key, conf.getToken());
     return {url, ssextra.str(), false, "directplay"};
 }
 
 media::PlaybackSource PlexBackend::resolvePlayback(
     const media::Item& item, const media::Media& version, const media::PlaybackOptions& opts) {
+    // the player retries the bare URL when the download one fails; music has
+    // no such retry and keeps the bare one
+    bool download = item.type != media::mediaTypeTrack && !opts.plainPartUrl;
     // direct play: no bitrate cap or forced
     if (opts.bitrateCap <= 0 || opts.forceDirectPlay) {
-        return directSource(version, opts.seekMs);
+        return directSource(version, opts.seekMs, download);
     }
 
     auto& conf = AppConfig::instance();
@@ -350,11 +355,11 @@ media::PlaybackSource PlexBackend::resolvePlayback(
             int64_t transcode = media::jint(mc, "transcodeDecisionCode");
             int64_t mde = media::jint(mc, "mdeDecisionCode");
             if (general >= 2000 || mde >= 2000 || transcode == 1000) {
-                return directSource(version, opts.seekMs);
+                return directSource(version, opts.seekMs, download);
             }
         } catch (const std::exception& ex) {
             brls::Logger::warning("plex music decision: {} (direct play)", ex.what());
-            return directSource(version, opts.seekMs);
+            return directSource(version, opts.seekMs, download);
         }
 
         std::string aextra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
@@ -439,14 +444,15 @@ media::PlaybackSource PlexBackend::resolvePlayback(
         throw std::runtime_error(fmt::format("{} ({})", "main/player/error"_i18n, general));
     }
     if (transcode == 1000) {
-        // the server refuses to transcode: direct play (no resume, as before)
-        return directSource(version, 0);
+        // the server refuses to transcode: direct play
+        return directSource(version, opts.seekMs, download);
     }
 
     std::string extra = fmt::format("network-timeout={}", HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += fmt::format(",http-proxy=\"{}\"", HTTP::PROXY);
     std::string play = conf.getUrl() + "/video/:/transcode/universal/start.m3u8?" + query;
-    return {play, extra, true, "transcode", session};
+    // server-side offset, in whole seconds like the offset sent: mpv's clock starts at 0 there
+    return {play, extra, true, "transcode", session, opts.seekMs / 1000 * 1000};
 }
 
 std::string PlexBackend::subtitleSidecarUrl(const std::string& streamKey) const {

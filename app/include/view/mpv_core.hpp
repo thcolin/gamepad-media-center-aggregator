@@ -120,6 +120,12 @@ public:
     /// mpv error code of the last MPV_END_FILE_REASON_ERROR (0 = none). Kept so
     /// the OSD/error dialog can surface a concrete reason for bug reports.
     int last_error = 0;
+    /// First log lines since the load or the last restart ("prefix: text",
+    /// redacted): -13 covers every open failure, these carry its cause to the
+    /// playback-error dialog.
+    std::string last_error_line;  // first ERROR line, any prefix
+    std::string last_warn_line;   // first WARN line from ffmpeg/stream
+    uint64_t load_generation = 0;  // bumped on START_FILE: a deferred error of a previous load is ignored
 
     inline static bool DEBUG = false;
 

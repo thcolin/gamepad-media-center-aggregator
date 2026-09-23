@@ -83,7 +83,7 @@ public:
 
 private:
     /// Direct-play source from the chosen Media version (Part.key + token).
-    media::PlaybackSource directSource(const media::Media& version, int64_t seekMs) const;
+    media::PlaybackSource directSource(const media::Media& version, int64_t seekMs, bool download) const;
 };
 
 }  // namespace plex

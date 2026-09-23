@@ -53,6 +53,7 @@
     "next": "Next",
     "error": "Playback error",
     "direct_fallback": "Transcode failed, playing directly",
+    "transcode_fallback": "Direct play failed, transcoding",
     "episode": "Episode",
     "speed_up": "Current speed {}"
   },
