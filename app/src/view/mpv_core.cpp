@@ -609,16 +609,16 @@ void MPVCore::eventMainLoop() {
             auto log = (mpv_event_log_message *)event->data;
             // keep the FIRST lines since the load or the last restart: with a
             // network failure the root cause comes first, then generic wrappers
-            auto capture = [log](std::string &slot) {
-                if (slot.empty()) slot = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
-            };
             if (log->log_level <= MPV_LOG_LEVEL_ERROR) {
-                brls::Logger::error("{}: {}", log->prefix, log->text);
-                capture(this->last_error_line);
+                std::string line = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
+                brls::Logger::error("{}", line);
+                if (this->last_error_line.empty()) this->last_error_line = line;
             } else if (log->log_level <= MPV_LOG_LEVEL_WARN) {
-                if (std::strncmp(log->prefix, "ffmpeg", 6) == 0 || std::strcmp(log->prefix, "stream") == 0)
-                    capture(this->last_warn_line);
-                brls::Logger::warning("{}: {}", log->prefix, log->text);
+                std::string line = misc::redactLogLine(fmt::format("{}: {}", log->prefix, log->text));
+                if (this->last_warn_line.empty() &&
+                    (std::strncmp(log->prefix, "ffmpeg", 6) == 0 || std::strcmp(log->prefix, "stream") == 0))
+                    this->last_warn_line = line;
+                brls::Logger::warning("{}", line);
             } else if (log->log_level <= MPV_LOG_LEVEL_INFO) {
                 brls::Logger::info("{}: {}", log->prefix, log->text);
             } else if (log->log_level <= MPV_LOG_LEVEL_V) {

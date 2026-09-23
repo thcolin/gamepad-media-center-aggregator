@@ -36,6 +36,32 @@ int main() {
 
     CHECK_EQ(redactLogLine("no url here"), "no url here");
 
+    CHECK_EQ(redactLogLine("tcp: Failed to resolve hostname 82-64-12-34.abc.plex.direct: nodename nor servname"),
+        "tcp: Failed to resolve hostname <host>: nodename nor servname");
+
+    CHECK_EQ(redactLogLine("tcp: Connection to tcp://82.64.12.34:32400 failed, retry 82.64.12.34."),
+        "tcp: Connection to tcp://<host>:32400 failed, retry <host>.");
+
+    CHECK_EQ(redactLogLine("ffmpeg 7.1.5 HTTP/1.1"), "ffmpeg 7.1.5 HTTP/1.1");
+
+    CHECK_EQ(redactLogLine("ftp://bob:hunter2@nas.example.org/Films/a.mkv"), "ftp://<host>/…");
+
+    CHECK_EQ(redactLogLine("ftp://bob:hunter2@nas.example.org:2121/a.mkv"), "ftp://<host>:2121/…");
+
+    CHECK_EQ(redactLogLine("http://[fe80::1]/a"), "http://<host>/…");
+
+    CHECK_EQ(redactLogLine("ApiKey=K x-plex-token=T X-Plex-Token%3DT%26a=1 token=abc;"),
+        "ApiKey=*** x-plex-token=*** X-Plex-Token%3D***%26a=1 token=***;");
+
+    CHECK_EQ(redactLogLine("a\x01" "b\x1b[31mc"), "ab[31mc");
+
+    {
+        std::string longLine(300, 'x');
+        longLine.replace(199, 2, "\xc3\xa9");
+        std::string out = redactLogLine(longLine);
+        CHECK_EQ(out, std::string(199, 'x') + "…");
+    }
+
     if (failures == 0) {
         printf("test_log_redact: OK\n");
         return 0;
