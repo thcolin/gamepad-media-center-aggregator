@@ -122,6 +122,17 @@ int main() {
         back.media[0].parts[0].streams[0].isDefault == true &&
         back.media[0].parts[0].streams[0].language == "English");
 
+    // /library/sections: `hidden` is Plex's visibility (1 = excluded from home,
+    // 2 = excluded from home and search), not a "don't list" flag (issue #63)
+    json sections = json::parse(R"({"MediaContainer": {"size": 3, "Directory": [
+        {"key": "1", "type": "movie", "title": "Filme", "hidden": 0},
+        {"key": "2", "type": "movie", "title": "Z Anime Filme", "hidden": 1},
+        {"key": "3", "type": "show", "title": "Z Anime Serien", "hidden": 2}
+    ]}})");
+    auto libs = sections.get<plex::Container<plex::Section>>();
+    CHECK(libs.Items.size() == 3);
+    CHECK(libs.Items.size() == 3 && libs.Items[1].title == "Z Anime Filme" && libs.Items[2].type == "show");
+
     if (failures == 0) {
         printf("test_plex_json: OK\n");
         return 0;
