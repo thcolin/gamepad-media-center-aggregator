@@ -9,6 +9,46 @@ prepared with [git-cliff](https://git-cliff.org/) from conventional commits
 hand. For the history of the upstream project this fork is based on, see the
 [Switchfin changelog](https://github.com/dragonflylee/switchfin/blob/dev/CHANGELOG.md).
 
+## [1.2.0] - 2026-09-24
+
+### Added
+
+- **Playback errors now say why (#69).** The error dialog and the fallback
+  toasts show the first ffmpeg or stream error of the load, such as
+  `https: HTTP error 500` or `stream: Failed to open`. Host names, IP
+  addresses, tokens and API keys are masked in these lines, so a screenshot
+  of the dialog is safe to post in an issue.
+- **Plex: automatic fallback to transcoding (#69).** When direct play fails to
+  open, the player retries once through the server transcoder at 8 Mbps and
+  shows a toast. It is skipped when force direct play is on, and never used
+  for music or Stremio.
+
+### Fixed
+
+- **Plex: "mpv -13" playback failures (#50).** On some connections, Plex Relay
+  in particular, the server answered the stream request with an HTTP 500 while
+  downloads worked. Direct play now streams through the download URL, and
+  falls back to the plain part URL when a shared user has no download rights.
+- **Changing subtitles or audio no longer restarts the video (#69).** A reload
+  that fails to open resumes from the position it asked for, and resumed
+  transcodes (Plex and Jellyfin) keep reporting absolute positions to the
+  server.
+- **GMCA quit on startup when `config.json` was corrupted (#56).** The
+  unreadable file is now moved to `config.json.bak`, the defaults are
+  restored, and a notification says the settings were reset. Settings are
+  also saved through a temporary file and a rename, so a save cut short no
+  longer leaves a truncated config.
+- **Plex: libraries excluded from home were missing from the sidebar (#63).**
+  Libraries set to "exclude from home" or "exclude from home and search" in
+  Plex are listed again. Libraries hidden in Settings > Libraries stay hidden.
+
+### Changed
+
+- **macOS builds use ffmpeg 9.0.2 (#80).** The CI now installs its prebuilt
+  dependencies from this repository's `ci-deps` prerelease instead of the
+  upstream Switchfin releases, whose assets kept disappearing. Switch and PS4
+  move to dav1d 1.5.4, Windows to curl 8.21.0.
+
 ## [1.1.0] - 2026-07-17
 
 ### Added
