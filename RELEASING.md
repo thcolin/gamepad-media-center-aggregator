@@ -70,6 +70,42 @@ get stuck on (or are offered) an old version.
   always resolves to the newest asset. Note that pleNx also self-updates in-app
   on Vita since v0.1.14, so users who stay on that channel are unaffected.
 
+## CI dependencies
+
+The `build` workflow installs prebuilt packages (Switch portlibs, PS4 pacbrew,
+Vita, Windows mingw, macOS dylibs) from the `ci-deps` prerelease of this repo,
+through `DEPS_URL` at the top of `build.yaml`. They are copies of the assets
+that dragonflylee/switchfin publishes in its `switch-portlibs`, `pacbrew`,
+`vita-packages`, `mingw-packages` and `macos-dylib` prereleases. Upstream
+replaces those assets over time, so pointing the build at them broke it every
+time a pinned name disappeared. `SHA256SUMS` in the release lists every file.
+
+`ci-deps` must never become the latest release: the in-app updater reads
+`releases/latest`, and the release has no app build in it. Keep it a
+prerelease, and pass `--latest=false` on every command that creates or edits it.
+
+To add or bump a package:
+
+1. Download it from the upstream release and pick a version that keeps ffmpeg
+   and mpv where they are, unless the bump is the point.
+2. Upload it and refresh the checksums:
+   ```sh
+   R=thcolin/gamepad-media-center-aggregator
+   gh release upload ci-deps -R $R <files>
+   gh release download ci-deps -R $R -D ci-deps
+   (cd ci-deps && rm SHA256SUMS && shasum -a 256 * > SHA256SUMS)
+   gh release upload ci-deps -R $R --clobber ci-deps/SHA256SUMS
+   ```
+3. Change the version in `build.yaml`, and check that
+   `gh release view -R $R` still shows the app's last version.
+
+Keep the old file in the release until no branch uses it: open PRs still
+point at it.
+
+Vita curl is the one package we build ourselves (threaded resolver, see
+`scripts/vita/curl`). The `vita-packages` workflow rebuilds it and uploads it
+to `ci-deps` on manual dispatch; refresh `SHA256SUMS` afterwards.
+
 ## Notes
 
 - The default/main branch is `dev`.
