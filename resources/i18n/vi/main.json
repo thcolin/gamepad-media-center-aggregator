@@ -358,6 +358,7 @@
         "keyboard": "Bàn phím"
       },
       "config_dir": "Thư mục cấu hình",
+      "config_reset": "Không đọc được tệp cấu hình, đã đặt lại",
       "logout": "Đăng xuất khỏi tài khoản hiện tại \n(ứng dụng sẽ thoát)",
       "up2date": "Bạn đang sử dụng phiên bản mới nhất",
       "upgrade": "{} hiện đã có! Bạn đã sẵn sàng để cập nhật chưa?",

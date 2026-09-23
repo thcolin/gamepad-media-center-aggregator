@@ -358,6 +358,7 @@
         "keyboard": "Klávesnice"
       },
       "config_dir": "Konfigurační adresář",
+      "config_reset": "Konfigurační soubor byl nečitelný a byl obnoven na výchozí",
       "logout": "Odhlásit z aktuálního účtu \n(aplikace se ukončí)",
       "up2date": "Aplikace je aktuální",
       "upgrade": "{} je nyní k dispozici! Připraveni aktualizovat?",

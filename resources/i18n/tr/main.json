@@ -358,6 +358,7 @@
         "keyboard": "Klavye"
       },
       "config_dir": "Yapılandırma dizini",
+      "config_reset": "Yapılandırma dosyası okunamadı ve sıfırlandı",
       "logout": "Mevcut hesaptan çıkış yap (uygulamadan çıkılacaktır)",
       "up2date": "Uygulama güncel",
       "upgrade": "{} sürümü şimdi mevcut! Güncellensin mi?",

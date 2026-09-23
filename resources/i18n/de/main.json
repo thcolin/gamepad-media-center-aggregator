@@ -358,6 +358,7 @@
         "keyboard": "Tastatur"
       },
       "config_dir": "Konfigurationsordner",
+      "config_reset": "Die Konfigurationsdatei war unlesbar und wurde zurückgesetzt",
       "logout": "Vom aktuellen Konto abmelden \n(die Applikation wird beendet)",
       "up2date": "App ist auf dem neusten Stand",
       "upgrade": "{} ist jetzt verfügbar! Bereit zum Aktualisieren?",
