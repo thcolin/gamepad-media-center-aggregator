@@ -21,14 +21,15 @@ jobs:
       run: |
         # Only curl is built here (ENABLE_THREADED_RESOLVER=ON, see
         # scripts/vita/curl). It links mbedtls and zlib at build time: zlib
-        # ships with vitasdk, mbedtls comes from the ci-deps mirror.
-        # vita-makepkg refuses to run as root.
+        # ships with vitasdk, mbedtls comes from the ci-deps mirror. --nodeps
+        # because vita-makepkg looks for $VITASDK/bin/pacman, which this image
+        # does not have (vdpm wraps it). vita-makepkg refuses to run as root.
         vdpm pacman --noconfirm -U $DEPS_URL/mbedtls-3.6.7-1-vita.pkg.tar.xz
         chown -R vitasdk:vitasdk scripts/vita
         su -p vitasdk -s /bin/bash <<'EOF'
           export PATH=$VITASDK/bin:$PATH
           cd $GITHUB_WORKSPACE/scripts/vita/curl
-          vita-makepkg -Cf --noconfirm
+          vita-makepkg -dCf --noconfirm
         EOF
 
     - name: Upload packages
