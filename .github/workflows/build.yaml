@@ -33,6 +33,10 @@ on:
         description: disable builtin NSP
         type: boolean
 
+env:
+  # Prebuilt dependencies, see RELEASING.md.
+  DEPS_URL: https://github.com/thcolin/gamepad-media-center-aggregator/releases/download/ci-deps
+
 jobs:
   upload-release:
     needs: [ build-mingw, build-nx, build-macos, build-flatpak, build-aur, build-ps4, build-vita, build-android ]
@@ -106,8 +110,6 @@ jobs:
         driver: [opengl, deko3d]
     container:
       image: devkitpro/devkita64:20260219
-    env:
-      BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/switch-portlibs
     steps:
     - uses: actions/checkout@v6
       with:
@@ -120,13 +122,12 @@ jobs:
       if: ${{ matrix.driver == 'deko3d' }}
       run: |   
         dkp-pacman --noconfirm -R switch-libmpv
-        dkp-pacman --noconfirm -U $BASE_URL/libuam-master-1-any.pkg.tar.zst
+        dkp-pacman --noconfirm -U $DEPS_URL/libuam-master-1-any.pkg.tar.zst
     - name: Update dependencies
       run: |
-        dkp-pacman --noconfirm -U $BASE_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst
-        # mbedtls 3.6.5-1 -> 3.6.7-1: switch-portlibs dropped the 3.6.5 asset too.
-        for pkg in mbedtls-3.6.7-1 libssh2-1.11.1-1 dav1d-1.5.3-1 curl-8.16.0-2 ffmpeg-7.1.5-5 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
-          dkp-pacman --noconfirm -U $BASE_URL/switch-${pkg}-any.pkg.tar.zst
+        dkp-pacman --noconfirm -U $DEPS_URL/hacBrewPack-3.05-1-x86_64.pkg.tar.zst
+        for pkg in mbedtls-3.6.7-1 libssh2-1.11.1-1 dav1d-1.5.4-1 curl-8.16.0-3 ffmpeg-7.1.5-5 libmpv${{ matrix.shuffix }}-0.36.0-5 nspmini-main-1; do
+          dkp-pacman --noconfirm -U $DEPS_URL/switch-${pkg}-any.pkg.tar.zst
         done
         git config --system --add safe.directory $GITHUB_WORKSPACE
     - name: Build libusbhsfs
@@ -158,8 +159,6 @@ jobs:
     if: ${{ inputs.platform == 'ps4' || github.event_name != 'workflow_dispatch' }}
     container:
       image: xfangfang/pacbrew:250221
-    env:
-      BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/pacbrew
     steps:
     - uses: actions/checkout@v6
       with:
@@ -170,8 +169,8 @@ jobs:
         git -C library/borealis apply --verbose ../../scripts/patches/borealis-fixes.patch
     - name: Update dependencies
       run: |
-        for pkg in musl-1.5-3 mbedtls-2.28.10-2 sdl2-2.0.18-19 libcurl-7.80.0-5 dav1d-1.5.3-1 ffmpeg-7.1.5-3 libmpv-0.36.0-2; do
-          pacman --noconfirm -U $BASE_URL/ps4-openorbis-${pkg}-any.pkg.tar.gz
+        for pkg in musl-1.5-3 mbedtls-2.28.10-2 sdl2-2.0.18-19 libcurl-7.80.0-5 dav1d-1.5.4-1 ffmpeg-7.1.5-3 libmpv-0.36.0-2; do
+          pacman --noconfirm -U $DEPS_URL/ps4-openorbis-${pkg}-any.pkg.tar.gz
         done
         git config --system --add safe.directory $GITHUB_WORKSPACE
     - name: Build
@@ -195,7 +194,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.platform == 'psvita' || github.event_name != 'workflow_dispatch' }}
     container:
-      image: vitasdk/vitasdk:latest
+      image: vitasdk/vitasdk:2026.08@sha256:d955f0101f61a13134df5f5a2445eb00328a674aef6613b028670eb12f7abc88
     steps:
     - uses: actions/checkout@v6
       with:
@@ -205,24 +204,13 @@ jobs:
         git config --global --add safe.directory '*'
         git -C library/borealis apply --verbose ../../scripts/patches/borealis-fixes.patch
     - name: Update dependencies
-      env:
-        BASE_URL: https://github.com/dragonflylee/switchfin/releases/download/vita-packages
-        # curl is rebuilt with ENABLE_THREADED_RESOLVER=ON (scripts/vita/curl) and
-        # hosted on this fork's own vita-packages release: the app resolves server
-        # hostnames from background threads, where the synchronous resolver cannot
-        # honor DNS timeouts, so a slow lookup stalls forever. The other packages
-        # stay on the upstream (known-good) release.
-        CURL_URL: https://github.com/thcolin/pleNx/releases/download/vita-packages
       run: |
-        # mbedtls bumped 3.6.5-1 -> 3.6.7-1: switchfin removed the 3.6.5 asset
-        # from its vita-packages release (only 3.6.7 remains). 3.6.x is ABI-
-        # stable, so the curl/ffmpeg/mpv builds link against it unchanged.
-        for pkg in mbedtls-3.6.7-1 ffmpeg-n6.0-3 mpv-0.36.0-3; do
-          wget $BASE_URL/${pkg}-arm.tar.xz
+        # curl must be built with ENABLE_THREADED_RESOLVER=ON (scripts/vita/curl):
+        # the app resolves hostnames from background threads, where the
+        # synchronous resolver cannot honor DNS timeouts.
+        for pkg in mbedtls-3.6.7-1 curl-8.16.0-3 ffmpeg-n6.0-3 mpv-0.36.0-3; do
+          vdpm pacman --noconfirm -U $DEPS_URL/${pkg}-vita.pkg.tar.xz
         done
-        wget $CURL_URL/curl-8.16.0-3-arm.tar.xz
-        apk add ninja
-        vdpm $PWD/*-arm.tar.xz
         git config --system --add safe.directory $GITHUB_WORKSPACE
     - name: Build
       run: |
@@ -368,7 +356,7 @@ jobs:
     - name: Install deps
       run: |
         brew install create-dmg dylibbundler
-        curl -sSL https://github.com/dragonflylee/switchfin/releases/download/macos-dylib/dylib-ffmpeg8-mpv41-${{ matrix.tag }}.tar.gz | tar zxf - -C ${{ runner.temp }}
+        curl -fsSL $DEPS_URL/dylib-mpv41-${{ matrix.tag }}.tar.gz | tar zxf - -C ${{ runner.temp }}
     - name: Build App
       env:
         DYLD_LIBRARY_PATH: ${{ runner.temp }}/lib
@@ -432,8 +420,8 @@ jobs:
         git -C library/borealis apply --verbose ../../scripts/patches/borealis-fixes.patch
     - name: Install dependency
       run: |
-        for pkg in glfw-3.5.0-1 curl-8.16.0-1 mpv-0.41.0-1 libwebp-1.6.0-1; do
-          curl -sLO https://github.com/dragonflylee/switchfin/releases/download/mingw-packages/${MINGW_PACKAGE_PREFIX}-${pkg}-any.pkg.tar.zst
+        for pkg in glfw-3.5.0-1 curl-8.21.0-1 mpv-0.41.0-1 libwebp-1.6.0-1; do
+          curl -fsSLO $DEPS_URL/${MINGW_PACKAGE_PREFIX}-${pkg}-any.pkg.tar.zst
         done
         pacman -U --noconfirm *.pkg.tar.zst
 

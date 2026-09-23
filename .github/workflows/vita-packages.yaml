@@ -2,9 +2,6 @@ name: vita-packages
 
 on:
   workflow_dispatch:
-  push:
-    tags: [ vita-packages ]
-    branches: [ gxm, mpv ]
 
 permissions:
   contents: write
@@ -13,39 +10,30 @@ jobs:
   build-packages:
     runs-on: ubuntu-latest
     container:
-      image: vitasdk/vitasdk:latest
+      image: vitasdk/vitasdk:2026.08@sha256:d955f0101f61a13134df5f5a2445eb00328a674aef6613b028670eb12f7abc88
+    env:
+      DEPS_URL: https://github.com/thcolin/gamepad-media-center-aggregator/releases/download/ci-deps
     steps:
     - uses: actions/checkout@v6
       with:
         sparse-checkout: scripts/vita
-    - name: Install dependency
-      run: |
-        apk add ninja meson tar patch
     - name: Build curl
       run: |
-        # Only curl is customized in this fork (ENABLE_THREADED_RESOLVER=ON, see
-        # scripts/vita/curl); the other Vita deps stay on the upstream
-        # vita-packages release. curl links mbedtls + zlib at build time — zlib
-        # ships with vitasdk, so install just the upstream mbedtls package, then
-        # build curl as an unprivileged user (vita-makepkg refuses to run as root).
-        wget https://github.com/dragonflylee/switchfin/releases/download/vita-packages/mbedtls-3.6.5-1-arm.tar.xz
-        vdpm mbedtls-3.6.5-1-arm.tar.xz
-
-        adduser --gecos '' --home ${GITHUB_WORKSPACE}/scripts/vita --disabled-password builder
-        echo 'builder ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/builder
-        chown -R builder:builder scripts/vita
-
-        su - builder -c "cd curl && vita-makepkg"
+        # --nodeps: vita-makepkg looks for $VITASDK/bin/pacman, absent from this
+        # image; mbedtls is installed below and zlib ships with vitasdk.
+        vdpm pacman --noconfirm -U $DEPS_URL/mbedtls-3.6.7-1-vita.pkg.tar.xz
+        chown -R vitasdk:vitasdk scripts/vita
+        su -p vitasdk -s /bin/bash <<'EOF'
+          export PATH=$VITASDK/bin:$PATH
+          cd $GITHUB_WORKSPACE/scripts/vita/curl
+          vita-makepkg -dCf --noconfirm
+        EOF
 
     - name: Upload packages
       uses: softprops/action-gh-release@v3
       with:
-        name: vita-packages
-        tag_name: vita-packages
+        tag_name: ci-deps
         prerelease: true
-        files: scripts/vita/curl/*-arm.tar.xz
-        body: |
-          curl rebuilt with `ENABLE_THREADED_RESOLVER=ON` so the PS Vita can
-          apply DNS timeouts (async resolver) instead of stalling on hostnames.
-
-          ![download](https://img.shields.io/github/downloads/${{ github.repository }}/vita-packages/total?label=Downloads)
+        make_latest: false
+        overwrite_files: false
+        files: scripts/vita/curl/*.pkg.tar.xz
