@@ -47,6 +47,7 @@ constexpr uint32_t MINIMUM_WINDOW_HEIGHT = 360;
 #include "api/jellyfin/backend.hpp"
 #include "api/stremio/backend.hpp"
 #include "api/http.hpp"
+#include "utils/atomic_file.hpp"
 #include "utils/config.hpp"
 #include "utils/theme_palette.hpp"
 #include "utils/keybind.hpp"
@@ -268,19 +269,23 @@ bool AppConfig::init() {
     this->migratedFromLegacy = migrateLegacyConfigDir(dataDir("pleNx"), this->configDir());
     this->migratedFromLegacy |= migrateLegacyConfigDir(dataDir("Switchlex"), this->configDir());
     const std::string path = this->configDir() + "/config.json";
-#if !defined(USE_BOOST_FILESYSTEM) || defined(_WIN32)
-    std::ifstream f(fs::u8path(path));
-#else
-    std::ifstream f(path);
-#endif
-    if (f.is_open()) {
-        try {
-            nlohmann::json::parse(f).get_to(*this);
+    // get_to may have half-applied a rejected config: restore the defaults
+    const nlohmann::json defaults = *this;
+    try {
+        std::string raw;
+        if (AtomicFile::read(path, raw)) {
+            nlohmann::json::parse(raw).get_to(*this);
             brls::Logger::info("Load config from: {}", path);
-        } catch (const std::exception& ex) {
-            brls::Logger::error("AppConfig::load: {}", ex.what());
-            return false;
         }
+    } catch (const std::exception& ex) {
+        brls::Logger::error("AppConfig::load {}: {}", path, ex.what());
+        defaults.get_to(*this);
+        try {
+            brls::Logger::warning("AppConfig: unreadable config moved to {}", AtomicFile::quarantine(path));
+        } catch (const std::exception& e) {
+            brls::Logger::warning("AppConfig: cannot move {} aside: {}", path, e.what());
+        }
+        brls::sync([]() { brls::Application::notify(brls::getStr("main/setting/others/config_reset")); });
     }
 
 #if defined(_WIN32) && !defined(_WINRT_)
@@ -534,16 +539,7 @@ void AppConfig::save() {
     try {
         std::string dir = this->configDir();
         fs::create_directories(dir);
-#if !defined(USE_BOOST_FILESYSTEM) || defined(_WIN32)
-        std::ofstream f(fs::u8path(dir + "/config.json"));
-#else
-        std::ofstream f(dir + "/config.json");
-#endif
-        if (f.is_open()) {
-            nlohmann::json j(*this);
-            f << j.dump(2);
-            f.close();
-        }
+        AtomicFile::write(dir + "/config.json", nlohmann::json(*this).dump(2));
     } catch (const std::exception& ex) {
         brls::Logger::warning("AppConfig save: {}", ex.what());
     }

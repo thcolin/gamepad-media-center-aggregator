@@ -358,6 +358,7 @@
         "keyboard": "Teclado"
       },
       "config_dir": "Diretório de configuração",
+      "config_reset": "O arquivo de configuração estava ilegível e foi redefinido",
       "logout": "Terminar sessão da conta atual \n(a aplicação será fechada)",
       "up2date": "A aplicação está atualizada",
       "upgrade": "{} já está disponível! Quer atualizar?",

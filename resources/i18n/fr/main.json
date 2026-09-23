@@ -370,6 +370,7 @@
         "keyboard": "Clavier"
       },
       "config_dir": "Répertoire de configuration",
+      "config_reset": "Le fichier de configuration était illisible et a été réinitialisé",
       "logout": "Se déconnecter du compte actuel (l'application va se fermer)",
       "up2date": "L'application est déjà à jour",
       "upgrade": "Nouvelle version {} trouvée, souhaitez-vous mettre à jour ?",
