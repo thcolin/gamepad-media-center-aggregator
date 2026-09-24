@@ -2,9 +2,10 @@
     GMCA — Jellyfin/Emby protocol: endpoints, auth header, transport helpers,
     and mappers Jellyfin JSON -> neutral media:: model.
 
-    Emby and Jellyfin share the same API shape (Emby is the ancestor). The only
+    Emby and Jellyfin share the same API shape (Emby is the ancestor). The
     deltas handled here: the auth header is sent both as `Authorization:
-    MediaBrowser ...` (Jellyfin) and `X-Emby-Authorization: ...` (Emby).
+    MediaBrowser ...` (Jellyfin) and `X-Emby-Authorization: ...` (Emby), the
+    user avatar route, and the subtitle and library fields Emby leaves out.
 
     Units: Jellyfin uses TICKS (1 s = 10 000 000 ticks); we convert to ms
     (÷10 000). Container envelope: { Items[], TotalRecordCount, StartIndex }.
@@ -80,7 +81,7 @@ inline HTTP::Header headers(const std::string& token) {
     };
 }
 
-/// Jellyfin serves user avatars at /UserImage only, Emby at /Users/{id}/Images only.
+/// Jellyfin 10.9+ serves user avatars at /UserImage only, Emby at /Users/{id}/Images only.
 inline std::string userImageUrl(
     const std::string& baseUrl, const std::string& userId, const std::string& tag, bool emby) {
     if (tag.empty()) return "";
@@ -149,6 +150,7 @@ inline std::string subtitleKey(
 inline media::Media parseMediaSource(const nlohmann::json& j, const std::string& itemId, bool audio = false) {
     media::Media m;
     std::string msId = jstr(j, "Id");
+    if (msId.empty()) msId = itemId;
     m.container = jstr(j, "Container");
     m.bitrate = jint(j, "Bitrate") / 1000;  // bps -> kbps (parity with Plex Media.bitrate)
     m.duration = jint(j, "RunTimeTicks") / TICKS_PER_MS;
@@ -156,8 +158,7 @@ inline media::Media parseMediaSource(const nlohmann::json& j, const std::string&
     // direct-play / download path (also valid for downloadUrl): the backend
     // tokenizes {base}{key}. Audio items use /Audio/ (not /Videos/), else the
     // stream 404s (issue #11). mediaSourceId defaults to the item id.
-    p.key = fmt::format("/{}/{}/stream?static=true&mediaSourceId={}", audio ? "Audio" : "Videos", itemId,
-        msId.empty() ? itemId : msId);
+    p.key = fmt::format("/{}/{}/stream?static=true&mediaSourceId={}", audio ? "Audio" : "Videos", itemId, msId);
     p.container = m.container;
     p.duration = m.duration;
     p.accessible = true;
@@ -166,7 +167,7 @@ inline media::Media parseMediaSource(const nlohmann::json& j, const std::string&
         for (auto& s : j["MediaStreams"]) {
             media::Stream st = parseStream(s);
             if (st.streamType == media::streamTypeSubtitle && jbool(s, "IsExternal"))
-                st.key = subtitleKey(s, itemId, msId.empty() ? itemId : msId, st.index);
+                st.key = subtitleKey(s, itemId, msId, st.index);
             if (st.codec == "h264" || st.codec == "hevc" || st.codec == "av1")
                 m.videoCodec = st.codec;
             else if (st.streamType == media::streamTypeAudio && m.audioCodec.empty())
@@ -314,8 +315,9 @@ inline media::Section parseSection(const nlohmann::json& j) {
     // CollectionType: movies | tvshows | music | ...; a mixed-content library is
     // "mixed" on Emby and has no CollectionType on Jellyfin.
     std::string ct = jstr(j, "CollectionType");
-    if (ct.empty() && jstr(j, "Type") == "CollectionFolder") ct = media::mediaTypeMixed;
-    s.type = ct == "movies"    ? "movie"
+    bool mixed = ct == "mixed" || (ct.empty() && jstr(j, "Type") == "CollectionFolder");
+    s.type = mixed             ? media::mediaTypeMixed
+             : ct == "movies"  ? "movie"
              : ct == "tvshows" ? "show"
              : ct == "photos"  ? "photo"
              : ct == "music"   ? media::mediaTypeArtist
