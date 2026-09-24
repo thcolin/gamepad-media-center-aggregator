@@ -51,7 +51,10 @@
     "direct_fallback": "Kod dönüştürme başarısız, doğrudan oynatılıyor",
     "transcode_fallback": "Doğrudan oynatma başarısız, kod dönüştürülüyor",
     "episode": "Bölümler",
-    "speed_up": "Mevcut hız {}"
+    "speed_up": "Mevcut hız {}",
+    "repeat": "Tekrarla",
+    "repeat_one": "Bu video",
+    "repeat_all": "Tüm liste"
   },
   "media": {
     "sort": "Sırala",

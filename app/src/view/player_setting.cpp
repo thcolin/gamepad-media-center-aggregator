@@ -4,6 +4,7 @@
 #include "view/button_close.hpp"
 #include "view/mpv_core.hpp"
 #include "view/player_setting.hpp"
+#include "view/video_view.hpp"
 #include "api/backend.hpp"  // full media::Backend definition (subtitleMenuHint)
 
 using namespace brls::literals;
@@ -118,7 +119,7 @@ private:
     }
 };
 
-PlayerSetting::PlayerSetting() {
+PlayerSetting::PlayerSetting(VideoView* video) {
     this->inflateFromXMLRes("xml/view/player_setting.xml");
     brls::Logger::debug("PlayerSetting: create");
 
@@ -160,6 +161,14 @@ PlayerSetting::PlayerSetting() {
             MPVCore::OSD_ON_TOGGLE = value;
             conf.setItem(AppConfig::OSD_ON_TOGGLE, value);
         });
+
+    btnSpeed->init("main/player/speed"_i18n, VideoView::speedLabels(), VideoView::speedIndex(video->getSpeed()),
+        [video](int value) { video->setSpeed(VideoView::SPEEDS.at(value)); });
+
+    std::vector<std::string> repeats = {"hints/off"_i18n, "main/player/repeat_one"_i18n};
+    if (video->hasList()) repeats.push_back("main/player/repeat_all"_i18n);
+    btnRepeat->init("main/player/repeat"_i18n, repeats, (int)video->getRepeat(),
+        [video](int value) { video->setRepeat((VideoView::Repeat)value); });
 
     /// Player mirror
     btnVideoMirror->init("main/setting/filter/mirror"_i18n,

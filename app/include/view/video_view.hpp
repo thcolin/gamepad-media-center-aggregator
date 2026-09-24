@@ -64,11 +64,27 @@ public:
     /// considered handled (e.g. PlayerView fell back to direct play) and no
     /// error dialog is shown. Unset for local/remote players -> dialog as before.
     void registerError(brls::ActionListener action);
+    /// Optional hook for Repeat::One at end of file: reload the current item
+    /// from its start. Unset -> mpv loop-file, fine for raw local/remote files.
+    void registerReplay(brls::ActionListener action);
     void registerActions(const std::string& hintText, const brls::ControllerButton button,
         const brls::BrlsKeyCombination key, const brls::ActionListener& actionListener, bool hidden = false,
         bool allowRepeating = false);
 
     void showOSD(bool autoHide = true);
+
+    /// Playback speed and repeat last for the player session: kept across
+    /// episodes, back to 1.0x / None when the player closes.
+    enum class Repeat { None, One, All };
+    inline static const std::vector<double> SPEEDS = {2.0, 1.75, 1.5, 1.25, 1.0, 0.75, 0.5};
+    static std::vector<std::string> speedLabels();
+    static int speedIndex(double value);
+    double getSpeed() const { return this->speed; }
+    void setSpeed(double value);
+    Repeat getRepeat() const { return this->repeat; }
+    void setRepeat(Repeat value);
+    /// Repeat::All needs an episode or file list
+    bool hasList() const { return this->listSize > 1; }
 
     static bool close(bool quit = false);
 
@@ -139,6 +155,7 @@ private:
     static void disableDimming(bool disable);
 
     int playIndex = -1;
+    int listSize = 0;
     brls::Event<int> playIndexEvent;
     brls::VoidEvent settingEvent;
     View* lastFocusedView = nullptr;
@@ -155,6 +172,10 @@ private:
 
     /// fired on MPV_FILE_ERROR; returning true suppresses the error dialog
     brls::ActionListener errorAction = nullptr;
+    brls::ActionListener replayAction = nullptr;
+
+    double speed = 1.0;
+    Repeat repeat = Repeat::None;
 
     int64_t seekingRange = 0;
     size_t seekingIter = 0;

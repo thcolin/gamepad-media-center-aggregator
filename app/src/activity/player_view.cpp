@@ -57,6 +57,15 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
         return this->tryDirectPlayFallback() || this->tryPlainUrlFallback() || this->tryTranscodeFallback();
     });
 
+    // Repeat::One: reload from 0 rather than mpv loop-file, which would restart
+    // a transcode resumed mid-file at its offset
+    view->registerReplay([this](...) {
+        MPVCore::instance().reset();
+        this->scrobbled = false;
+        this->playMedia(0);
+        return true;
+    });
+
     // stable session identifier (24 characters)
     this->sessionId = misc::randHex(12);
 
@@ -66,8 +75,8 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
 
     playSubscribeID = view->getPlayEvent()->subscribe([this](int index) { this->playIndex(index); });
 
-    settingSubscribeID = view->getSettingEvent()->subscribe([]() {
-        brls::View* setting = new PlayerSetting();
+    settingSubscribeID = view->getSettingEvent()->subscribe([this]() {
+        brls::View* setting = new PlayerSetting(this->view);
         brls::Application::pushActivity(new brls::Activity(setting));
     });
 

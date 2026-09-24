@@ -51,7 +51,10 @@
     "direct_fallback": "Překódování selhalo, přímé přehrávání",
     "transcode_fallback": "Přímé přehrávání selhalo, překódování",
     "episode": "Epizoda",
-    "speed_up": "Aktuální rychlost {}"
+    "speed_up": "Aktuální rychlost {}",
+    "repeat": "Opakovat",
+    "repeat_one": "Toto video",
+    "repeat_all": "Celý seznam"
   },
   "media": {
     "sort": "Řadit",

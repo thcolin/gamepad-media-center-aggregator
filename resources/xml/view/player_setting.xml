@@ -45,6 +45,10 @@
                          (direct-access icons), removed from here to avoid
                          duplication -->
                     <brls:SelectorCell
+                        id="setting/video/speed" />
+                    <brls:SelectorCell
+                        id="setting/video/repeat" />
+                    <brls:SelectorCell
                         id="setting/video/mirror" />
                     <brls:SelectorCell
                         id="setting/video/rotation" />

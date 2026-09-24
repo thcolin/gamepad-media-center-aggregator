@@ -51,7 +51,10 @@
     "direct_fallback": "トランスコード失敗、直接再生します",
     "transcode_fallback": "直接再生失敗、トランスコードで再生します",
     "episode": "エピソード",
-    "speed_up": "現在の速度 {}"
+    "speed_up": "現在の速度 {}",
+    "repeat": "リピート",
+    "repeat_one": "この動画",
+    "repeat_all": "リスト全体"
   },
   "media": {
     "sort": "並び替え",

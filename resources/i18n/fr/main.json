@@ -55,7 +55,10 @@
     "direct_fallback": "Échec du transcodage, lecture directe",
     "transcode_fallback": "Échec de la lecture directe, transcodage",
     "episode": "Épisode",
-    "speed_up": "Vitesse actuelle {}"
+    "speed_up": "Vitesse actuelle {}",
+    "repeat": "Répéter",
+    "repeat_one": "Cette vidéo",
+    "repeat_all": "Toute la liste"
   },
   "media": {
     "sort": "Tri",
