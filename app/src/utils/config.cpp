@@ -44,6 +44,7 @@ constexpr uint32_t MINIMUM_WINDOW_HEIGHT = 360;
 #include "api/plex/auth.hpp"
 #include "api/backend.hpp"
 #include "api/plex/backend.hpp"
+#include "api/jellyfin/auth.hpp"
 #include "api/jellyfin/backend.hpp"
 #include "api/stremio/backend.hpp"
 #include "api/http.hpp"
@@ -587,6 +588,23 @@ media::BackendType AppConfig::backendTypeFromString(const std::string& type) {
     return media::BackendType::Plex;
 }
 
+std::string AppConfig::reachableUrl(const AppServer& s) {
+    // The candidates are raced in parallel so an unreachable LAN address does
+    // not block a reachable remote/relay one while roaming (GH #36). Stremio has
+    // no single reachable "server" (it aggregates remote addons + an optional
+    // account); skip the probe, accept the stored one.
+    switch (backendTypeFromString(s.type)) {
+        case media::BackendType::Stremio:
+            return s.urls.empty() ? std::string() : s.urls.front();
+        case media::BackendType::Jellyfin:
+        case media::BackendType::Emby:
+            return plex::raceConnections(s.urls, [](const std::string& url) { return jellyfin::probeConnection(url); });
+        case media::BackendType::Plex:
+            break;
+    }
+    return plex::raceConnections(s.urls, s.access_token);
+}
+
 const std::vector<std::string>& AppConfig::getStremioAddons() const {
     static const std::vector<std::string> empty;
     if (this->user == this->users.end()) return empty;
@@ -616,12 +634,8 @@ bool AppConfig::checkLogin() {
     if (it == this->servers.end() || it->urls.empty()) return false;
 
     // Reconnect to a remembered endpoint. No dependency on plex.tv here: a
-    // reachable stored URL is enough. The candidates are raced in parallel so an
-    // unreachable LAN address no longer blocks a reachable remote/relay one while
-    // roaming (GH #36). Stremio has no single reachable "server" (it aggregates
-    // remote addons + an optional account); skip the probe, accept the stored one.
-    std::string url = it->type == "stremio" ? (it->urls.empty() ? std::string() : it->urls.front())
-                                            : plex::raceConnections(it->urls, it->access_token);
+    // reachable stored URL is enough.
+    std::string url = reachableUrl(*it);
     if (url.empty()) {
         brls::Logger::warning("AppConfig checkLogin: aucun endpoint joignable pour {}", it->name);
         return false;

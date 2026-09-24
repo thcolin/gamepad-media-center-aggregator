@@ -122,12 +122,7 @@ static void connectWithUser(const AppUser& u) {
                 }
             }
 
-            // Stremio has no single reachable endpoint: accept the stored url.
-            // Otherwise race the stored candidates in parallel so an unreachable
-            // LAN address does not block a reachable remote/relay one (GH #36).
-            std::string base = target.type == "stremio"
-                                   ? (target.urls.empty() ? std::string() : target.urls.front())
-                                   : plex::raceConnections(target.urls, target.access_token);
+            std::string base = AppConfig::reachableUrl(target);
             if (base.empty() && fresh) base = plex::findBestConnection(*fresh);
             if (base.empty()) throw std::runtime_error(unreachable);
 
