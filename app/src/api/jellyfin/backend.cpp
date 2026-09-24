@@ -556,12 +556,13 @@ std::string JellyfinBackend::imageUrl(const std::string& path, int width, int he
     if (path.rfind("http", 0) == 0) return path;  // external (passed through)
     std::string url = base() + path;
     std::string sep = url.find('?') == std::string::npos ? "?" : "&";
+    // Emby ignores fillWidth/fillHeight and serves the original image.
     if (width > 0) {
-        url += sep + "fillWidth=" + std::to_string(width);
+        url += sep + "maxWidth=" + std::to_string(width);
         sep = "&";
     }
     if (height > 0) {
-        url += sep + "fillHeight=" + std::to_string(height);
+        url += sep + "maxHeight=" + std::to_string(height);
         sep = "&";
     }
     url += sep + "api_key=" + token();
