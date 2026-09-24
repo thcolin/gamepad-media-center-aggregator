@@ -208,6 +208,7 @@ struct Media {
 };
 inline void from_json(const nlohmann::json& j, Media& r) {
     r.id = jint(j, "id");
+    r.sourceId = jstr(j, "sourceId");
     r.videoResolution = jstr(j, "videoResolution");
     r.videoCodec = jstr(j, "videoCodec");
     r.audioCodec = jstr(j, "audioCodec");
@@ -412,6 +413,7 @@ inline void to_json(nlohmann::json& j, const Part& r) {
 inline void to_json(nlohmann::json& j, const Media& r) {
     j = nlohmann::json::object();
     j["id"] = r.id;
+    if (!r.sourceId.empty()) j["sourceId"] = r.sourceId;
     j["videoResolution"] = r.videoResolution;
     j["videoCodec"] = r.videoCodec;
     j["audioCodec"] = r.audioCodec;
