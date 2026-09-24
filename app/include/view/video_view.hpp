@@ -83,7 +83,6 @@ public:
     void setSpeed(double value);
     Repeat getRepeat() const { return this->repeat; }
     void setRepeat(Repeat value);
-    /// Repeat::All needs an episode or file list
     bool hasList() const { return this->listSize > 1; }
 
     static bool close(bool quit = false);
@@ -176,6 +175,7 @@ private:
 
     double speed = 1.0;
     Repeat repeat = Repeat::None;
+    std::string loopFile, loopPlaylist;
 
     int64_t seekingRange = 0;
     size_t seekingIter = 0;

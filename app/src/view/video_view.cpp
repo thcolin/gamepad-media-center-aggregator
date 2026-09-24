@@ -36,6 +36,15 @@ static int getSeekRange(int current) {
 VideoView::VideoView() {
     this->inflateFromXMLRes("xml/view/video_view.xml");
     brls::Logger::debug("VideoView: created");
+    // mpv loop flags are global and MusicView leaves its own set: start the
+    // session without them and give them back on close
+    {
+        auto& mpv = MPVCore::instance();
+        this->loopFile = mpv.getString("loop-file");
+        this->loopPlaylist = mpv.getString("loop-playlist");
+        mpv.command("set", "loop-file", "no");
+        mpv.command("set", "loop-playlist", "no");
+    }
     this->setHideHighlightBorder(true);
     this->setHideHighlightBackground(true);
     this->setHideClickAnimation(true);
@@ -350,8 +359,8 @@ VideoView::VideoView() {
     this->btnCast->registerClickAction([this](...) { return this->toggleProfile(); });
     this->btnCast->addGestureRecognizer(new brls::TapGestureRecognizer(this->btnCast));
 
-    /// speed: LSB shortcut + touch long-press only (no longer on the OSD,
-    /// not relevant there per user feedback)
+    /// speed: LSB shortcut, touch long-press and the settings menu; not on
+    /// the OSD, not relevant there per user feedback
     this->registerActions(
         "main/player/speed"_i18n, brls::BUTTON_LSB, KeyBind::getVideoSpeed(),
         [this](...) { return this->toggleSpeed(); }, true);
@@ -363,8 +372,9 @@ VideoView::~VideoView() {
     disableDimming(false);
 
     auto& mpv = MPVCore::instance();
-    if (this->repeat == Repeat::One && !this->replayAction) mpv.command("set", "loop-file", "no");
     mpv.stop();
+    if (!this->loopFile.empty()) mpv.command("set", "loop-file", this->loopFile.c_str());
+    if (!this->loopPlaylist.empty()) mpv.command("set", "loop-playlist", this->loopPlaylist.c_str());
 }
 
 void VideoView::setTitie(const std::string& title) { this->titleLabel->setText(title); }
@@ -791,7 +801,7 @@ std::vector<std::string> VideoView::speedLabels() {
 int VideoView::speedIndex(double value) {
     for (size_t i = 0; i < SPEEDS.size(); i++)
         if (std::abs(SPEEDS[i] - value) < 0.01) return (int)i;
-    return speedIndex(1.0);
+    return (int)(std::find(SPEEDS.begin(), SPEEDS.end(), 1.0) - SPEEDS.begin());
 }
 
 void VideoView::setSpeed(double value) {

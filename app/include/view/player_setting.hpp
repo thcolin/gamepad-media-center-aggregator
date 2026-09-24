@@ -12,7 +12,6 @@ class VideoView;
 
 class PlayerSetting : public brls::Box {
 public:
-    /// `video` holds the session playback speed and repeat
     explicit PlayerSetting(VideoView* video);
     ~PlayerSetting() override;
 

@@ -165,10 +165,11 @@ PlayerSetting::PlayerSetting(VideoView* video) {
     btnSpeed->init("main/player/speed"_i18n, VideoView::speedLabels(), VideoView::speedIndex(video->getSpeed()),
         [video](int value) { video->setSpeed(VideoView::SPEEDS.at(value)); });
 
+    // labels follow VideoView::Repeat's order
     std::vector<std::string> repeats = {"hints/off"_i18n, "main/player/repeat_one"_i18n};
     if (video->hasList()) repeats.push_back("main/player/repeat_all"_i18n);
     btnRepeat->init("main/player/repeat"_i18n, repeats, (int)video->getRepeat(),
-        [video](int value) { video->setRepeat((VideoView::Repeat)value); });
+        [video](int value) { video->setRepeat(static_cast<VideoView::Repeat>(value)); });
 
     /// Player mirror
     btnVideoMirror->init("main/setting/filter/mirror"_i18n,
