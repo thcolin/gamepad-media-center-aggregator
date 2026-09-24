@@ -172,12 +172,12 @@ void JellyfinBackend::getHomeHubs(
                 }
             }
 
-            // Recently Added, one row per movie/show library
+            // Recently Added, one row per movie/show/music/mixed library
             auto views = parseContainer<media::Section>(
                 getSync(b + fmt::format(fmt::runtime(apiViews), uid), tok), parseSection);
             for (auto& v : views.Items) {
                 if (v.type != media::mediaTypeMovie && v.type != media::mediaTypeShow &&
-                    v.type != media::mediaTypeArtist)
+                    v.type != media::mediaTypeArtist && v.type != media::mediaTypeMixed)
                     continue;
                 HTTP::Form f = {{"ParentId", v.key}, {"Limit", std::to_string(cnt)}, {"Fields", itemFieldsValue}};
                 auto c = parseContainer<media::Item>(

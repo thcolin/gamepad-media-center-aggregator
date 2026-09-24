@@ -302,8 +302,10 @@ inline media::Section parseSection(const nlohmann::json& j) {
     media::Section s;
     s.key = jstr(j, "Id");
     s.title = jstr(j, "Name");
-    // CollectionType: movies | tvshows | music | ...
+    // CollectionType: movies | tvshows | music | ...; a mixed-content library is
+    // "mixed" on Emby and has no CollectionType on Jellyfin.
     std::string ct = jstr(j, "CollectionType");
+    if (ct.empty() && jstr(j, "Type") == "CollectionFolder") ct = media::mediaTypeMixed;
     s.type = ct == "movies"    ? "movie"
              : ct == "tvshows" ? "show"
              : ct == "photos"  ? "photo"

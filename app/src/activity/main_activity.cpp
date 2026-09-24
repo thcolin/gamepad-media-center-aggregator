@@ -208,7 +208,7 @@ void MainTabFrame::addLibraryTabs(const std::vector<plex::Section>& sections) {
     for (auto& s : sections) {
         // music (artist) is now supported (issue #11); other types stay out of scope
         if (s.type != plex::mediaTypeMovie && s.type != plex::mediaTypeShow && s.type != plex::mediaTypePhoto &&
-            s.type != plex::mediaTypeArtist)
+            s.type != plex::mediaTypeArtist && s.type != media::mediaTypeMixed)
             continue;
 
         this->libs_.push_back(s);
