@@ -72,6 +72,13 @@ std::unordered_map<AppConfig::Item, AppConfig::Option> AppConfig::settingMap = {
     {TRANSCODEC, {"transcodec", {"h264", "hevc", "av1"}}},
     {FORCE_DIRECTPLAY, {"force_directplay"}},
     {PLAYER_VIDEO_QUALITY, {"player_video_quality"}},
+    {PLAYER_MAX_RESOLUTION,
+        {
+            "player_max_resolution",
+            {"Auto", "4K", "1440p", "1080p", "720p", "480p"},
+            {0, 2160, 1440, 1080, 720, 480},
+        }},
+    {PLAYER_RESOLUTION_LIMIT, {"player_resolution_limit"}},
     {FULLSCREEN, {"fullscreen"}},
     {OSD_ON_TOGGLE, {"osd_on_toggle"}},
     {TOUCH_GESTURE, {"touch_gesture"}},
@@ -387,13 +394,22 @@ bool AppConfig::init() {
     // default transcode bitrate cap. The Vita decoder chokes on heavy direct
     // play (high-bitrate / unsupported codecs -> slideshow), so default to a
     // smooth 4 Mbps H.264 transcode; "Auto" (0 = direct play) stays selectable
-    // in the player quality menu. Other platforms default to direct play.
+    // in the player quality menu. Other platforms default to direct play (the
+    // Switch still transcodes sources above its max resolution, below).
     // Persisted now (it was reset every launch, so the user's lowered choice
     // never survived a restart).
 #if defined(__PSV__)
     MPVCore::VIDEO_QUALITY = this->getItem(PLAYER_VIDEO_QUALITY, (int64_t)4000000);
 #else
     MPVCore::VIDEO_QUALITY = this->getItem(PLAYER_VIDEO_QUALITY, (int64_t)0);
+#endif
+    // sources above 1080p overwhelm the Switch: transcode them down by default
+#if defined(__SWITCH__)
+    MPVCore::MAX_RESOLUTION = this->getItem(PLAYER_MAX_RESOLUTION, 1080);
+    MPVCore::RESOLUTION_LIMIT = this->getItem(PLAYER_RESOLUTION_LIMIT, true);
+#else
+    MPVCore::MAX_RESOLUTION = this->getItem(PLAYER_MAX_RESOLUTION, 0);
+    MPVCore::RESOLUTION_LIMIT = this->getItem(PLAYER_RESOLUTION_LIMIT, false);
 #endif
     MPVCore::VIDEO_CODEC = this->getItem(TRANSCODEC, MPVCore::VIDEO_CODEC);
     MPVCore::AUDIO_CHANNELS = this->getItem(AUDIO_CHANNELS, MPVCore::AUDIO_CHANNELS);

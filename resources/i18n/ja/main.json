@@ -263,7 +263,9 @@
       "subsync": "字幕同期"
     },
     "transcode": {
-      "header": "トランスコード"
+      "header": "トランスコード",
+      "max_resolution": "トランスコードの最大解像度",
+      "resolution_limit": "ダイレクト再生にも適用"
     },
     "control": {
       "header": "再生コントロール",

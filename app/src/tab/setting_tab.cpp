@@ -191,6 +191,32 @@ void SettingTab::onCreate() {
         });
 #endif
 
+    auto& resolutionOption = conf.getOptions(AppConfig::PLAYER_MAX_RESOLUTION);
+    std::vector<std::string> resolutionLabels;
+    std::vector<int> resolutionValues;
+    for (size_t i = 0; i < resolutionOption.values.size(); ++i) {
+#if defined(__PSV__)
+        // nothing above the Vita decoder ceiling (player_view.cpp)
+        if (resolutionOption.values[i] > 1080) continue;
+#endif
+        resolutionLabels.push_back(i == 0 ? "main/player/auto"_i18n : resolutionOption.options[i]);
+        resolutionValues.push_back((int)resolutionOption.values[i]);
+    }
+    auto resolutionIt = std::find(resolutionValues.begin(), resolutionValues.end(), MPVCore::MAX_RESOLUTION);
+    selectorMaxResolution->init("main/setting/transcode/max_resolution"_i18n, resolutionLabels,
+        resolutionIt != resolutionValues.end() ? (int)(resolutionIt - resolutionValues.begin()) : 0,
+        [resolutionValues](int selected) {
+            MPVCore::MAX_RESOLUTION = resolutionValues[selected];
+            AppConfig::instance().setItem(AppConfig::PLAYER_MAX_RESOLUTION, MPVCore::MAX_RESOLUTION);
+        });
+
+    btnResolutionLimit->init(
+        "main/setting/transcode/resolution_limit"_i18n, MPVCore::RESOLUTION_LIMIT, [&conf](bool value) {
+            if (MPVCore::RESOLUTION_LIMIT == value) return;
+            MPVCore::RESOLUTION_LIMIT = value;
+            conf.setItem(AppConfig::PLAYER_RESOLUTION_LIMIT, value);
+        });
+
 #if defined(__PS4__) || defined(__PSV__) || defined(TRIMUI)
     selectorAudioChannels->setVisibility(brls::Visibility::GONE);
 #else

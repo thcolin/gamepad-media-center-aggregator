@@ -263,7 +263,9 @@
       "subsync": "字幕同步"
     },
     "transcode": {
-      "header": "转码配置"
+      "header": "转码配置",
+      "max_resolution": "最大转码分辨率",
+      "resolution_limit": "同时限制直接播放"
     },
     "control": {
       "header": "播放控制",

@@ -263,7 +263,9 @@
       "subsync": "Đồng bộ phụ đề"
     },
     "transcode": {
-      "header": "Chuyển mã"
+      "header": "Chuyển mã",
+      "max_resolution": "Độ phân giải chuyển mã tối đa",
+      "resolution_limit": "Giới hạn cả phát trực tiếp"
     },
     "control": {
       "header": "Điều khiển phát lại",

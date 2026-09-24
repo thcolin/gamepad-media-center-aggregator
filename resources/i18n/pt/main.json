@@ -263,7 +263,9 @@
       "subsync": "Sincronização de legendas"
     },
     "transcode": {
-      "header": "Transcodificação"
+      "header": "Transcodificação",
+      "max_resolution": "Resolução máxima da transcodificação",
+      "resolution_limit": "Limitar também a reprodução direta"
     },
     "control": {
       "header": "Controlo de reprodução",

@@ -263,7 +263,9 @@
       "subsync": "Alt Yazı Eşitleme"
     },
     "transcode": {
-      "header": "Yeniden Kodlama"
+      "header": "Yeniden Kodlama",
+      "max_resolution": "Maksimum dönüştürme çözünürlüğü",
+      "resolution_limit": "Doğrudan oynatmayı da sınırla"
     },
     "control": {
       "header": "Oynatma Denetimleri",

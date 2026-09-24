@@ -9,6 +9,7 @@
 
 #include "api/jellyfin/backend.hpp"
 #include "api/jellyfin/types.hpp"
+#include "api/media/resolution.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
 #include <borealis/core/logger.hpp>
@@ -505,7 +506,7 @@ media::PlaybackSource JellyfinBackend::resolvePlayback(
 
     // transcode (best-effort HLS master)
     HTTP::Form form = {
-        {"mediaSourceId", item.ratingKey},
+        {"mediaSourceId", version.sourceId.empty() ? item.ratingKey : version.sourceId},
         {"VideoCodec", opts.videoCodec},
         {"AudioCodec", "aac,mp3"},
         {"VideoBitrate", std::to_string(opts.bitrateCap)},
@@ -519,6 +520,10 @@ media::PlaybackSource JellyfinBackend::resolvePlayback(
         form["SubtitleMethod"] = "Encode";  // burn-in
     }
     if (opts.seekMs > 0) form["StartTimeTicks"] = std::to_string(opts.seekMs * TICKS_PER_MS);
+    if (opts.maxHeight > 0) {
+        form["MaxWidth"] = std::to_string(media::resolutionBoxWidth(opts.maxHeight));
+        form["MaxHeight"] = std::to_string(opts.maxHeight);
+    }
     std::string url = base() + fmt::format(fmt::runtime(apiVideoMaster), item.ratingKey, HTTP::encode_form(form));
     return {url, extra().str(), true, "transcode"};
 }

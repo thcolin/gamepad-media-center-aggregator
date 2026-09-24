@@ -182,6 +182,17 @@ int main() {
         CHECK(keep.count("e3") == 0);  // its episode -> pruned
     }
 
+    {
+        // the Emby media source id survives the offline snapshot
+        media::Media m;
+        m.sourceId = "mediasource_743";
+        m.width = 1920;
+        nlohmann::json j = m;
+        media::Media back = j.get<media::Media>();
+        CHECK(back.sourceId == "mediasource_743");
+        CHECK(back.width == 1920);
+    }
+
     if (failures == 0) {
         printf("test_offline_catalog: OK\n");
         return 0;

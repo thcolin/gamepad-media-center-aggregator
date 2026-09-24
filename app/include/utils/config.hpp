@@ -105,6 +105,8 @@ public:
         TRANSCODEC,
         FORCE_DIRECTPLAY,
         PLAYER_VIDEO_QUALITY,  // transcode bitrate cap (bps); 0 = auto/direct play
+        PLAYER_MAX_RESOLUTION,
+        PLAYER_RESOLUTION_LIMIT,
         OSD_ON_TOGGLE,
         TOUCH_GESTURE,
         CLIP_POINT,

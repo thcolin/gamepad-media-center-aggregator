@@ -275,7 +275,9 @@
       "subsync": "Synchronisation des sous-titres"
     },
     "transcode": {
-      "header": "Paramètres de transcodage"
+      "header": "Paramètres de transcodage",
+      "max_resolution": "Résolution max du transcodage",
+      "resolution_limit": "Limiter aussi la lecture directe"
     },
     "control": {
       "header": "Contrôle de lecture",
