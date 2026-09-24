@@ -17,6 +17,7 @@
 #include "tab/jellyfin_add.hpp"
 #include "activity/main_activity.hpp"
 #include "api/jellyfin/auth.hpp"
+#include "api/jellyfin/types.hpp"
 #include "utils/config.hpp"
 
 using namespace brls::literals;
@@ -113,6 +114,7 @@ void JellyfinAdd::finish(const std::string& url, const jellyfin::LoginResult& r)
     u.name = r.userName;
     u.access_token = r.token;
     u.server_id = s.id;
+    u.thumb = jellyfin::userImageUrl(url, r.userId, r.userImageTag, this->type == "emby");
     AppConfig::instance().addUser(u, url);
 
     brls::Application::clear();

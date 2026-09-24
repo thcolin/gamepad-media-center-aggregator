@@ -32,6 +32,7 @@ LoginResult login(const std::string& baseUrl, const std::string& user, const std
     if (j.contains("User") && j["User"].is_object()) {
         r.userId = jstr(j["User"], "Id");
         r.userName = jstr(j["User"], "Name");
+        r.userImageTag = jstr(j["User"], "PrimaryImageTag");
     }
     if (r.token.empty() || r.userId.empty()) throw std::runtime_error("Authentication failed");
     return r;

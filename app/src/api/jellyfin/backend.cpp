@@ -172,12 +172,12 @@ void JellyfinBackend::getHomeHubs(
                 }
             }
 
-            // Recently Added, one row per movie/show library
+            // Recently Added, one row per movie/show/music/mixed library
             auto views = parseContainer<media::Section>(
                 getSync(b + fmt::format(fmt::runtime(apiViews), uid), tok), parseSection);
             for (auto& v : views.Items) {
                 if (v.type != media::mediaTypeMovie && v.type != media::mediaTypeShow &&
-                    v.type != media::mediaTypeArtist)
+                    v.type != media::mediaTypeArtist && v.type != media::mediaTypeMixed)
                     continue;
                 HTTP::Form f = {{"ParentId", v.key}, {"Limit", std::to_string(cnt)}, {"Fields", itemFieldsValue}};
                 auto c = parseContainer<media::Item>(
@@ -556,12 +556,13 @@ std::string JellyfinBackend::imageUrl(const std::string& path, int width, int he
     if (path.rfind("http", 0) == 0) return path;  // external (passed through)
     std::string url = base() + path;
     std::string sep = url.find('?') == std::string::npos ? "?" : "&";
+    // Emby ignores fillWidth/fillHeight and serves the original image.
     if (width > 0) {
-        url += sep + "fillWidth=" + std::to_string(width);
+        url += sep + "maxWidth=" + std::to_string(width);
         sep = "&";
     }
     if (height > 0) {
-        url += sep + "fillHeight=" + std::to_string(height);
+        url += sep + "maxHeight=" + std::to_string(height);
         sep = "&";
     }
     url += sep + "api_key=" + token();

@@ -33,6 +33,8 @@ const std::string mediaTypeClip = "clip";
 const std::string mediaTypeCollection = "collection";
 const std::string mediaTypePhoto = "photo";
 const std::string mediaTypePlaylist = "playlist";
+/// Section::type of a library holding both movies and shows (Jellyfin/Emby).
+const std::string mediaTypeMixed = "mixed";
 /// Music hierarchy (SPEC.md — issue #11). The existing Item fields are reused
 /// exactly like show/season/episode does, no new field is needed:
 ///   track.index            -> track number        track.parentIndex     -> disc number
