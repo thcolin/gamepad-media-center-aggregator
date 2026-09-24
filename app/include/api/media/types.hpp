@@ -188,6 +188,7 @@ enum class SourceKind {
 
 struct Media {
     int64_t id = 0;
+    std::string sourceId;         // Jellyfin/Emby MediaSource Id (Emby: "mediasource_<n>", not the item id)
     std::string videoResolution;  // "1080", "4k"...
     std::string videoCodec;
     std::string audioCodec;

@@ -506,7 +506,7 @@ media::PlaybackSource JellyfinBackend::resolvePlayback(
 
     // transcode (best-effort HLS master)
     HTTP::Form form = {
-        {"mediaSourceId", item.ratingKey},
+        {"mediaSourceId", version.sourceId.empty() ? item.ratingKey : version.sourceId},
         {"VideoCodec", opts.videoCodec},
         {"AudioCodec", "aac,mp3"},
         {"VideoBitrate", std::to_string(opts.bitrateCap)},
