@@ -135,11 +135,12 @@ inline media::Stream parseStream(const nlohmann::json& j) {
 }
 
 /// Emby sets DeliveryUrl in PlaybackInfo only, never on an item's MediaStreams.
-/// Jellyfin names SRT "subrip", which is not a valid Stream.{format}.
+/// Jellyfin reports SRT as "subrip".
 inline std::string subtitleKey(
-    const nlohmann::json& j, const std::string& itemId, const std::string& mediaSourceId, int index) {
+    const nlohmann::json& j, const std::string& itemId, const std::string& mediaSourceId, int64_t index) {
     std::string url = jstr(j, "DeliveryUrl");
     if (!url.empty()) return url;
+    if (!jbool(j, "IsTextSubtitleStream") || index < 0) return "";
     std::string format = jstr(j, "Codec");
     if (format.empty() || format == "subrip") format = "srt";
     return fmt::format("/Videos/{}/{}/Subtitles/{}/Stream.{}", itemId, mediaSourceId, index, format);
