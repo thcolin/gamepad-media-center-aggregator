@@ -9,6 +9,7 @@
 #include <api/media/resolution.hpp>
 
 using media::exceedsResolution;
+using media::limitedBitrate;
 using media::resolutionBitrate;
 using media::resolutionBoxWidth;
 
@@ -26,6 +27,7 @@ int main() {
     CHECK(resolutionBoxWidth(1440) == 2560);
     CHECK(resolutionBoxWidth(1080) == 1920);
     CHECK(resolutionBoxWidth(720) == 1280);
+    CHECK(resolutionBoxWidth(480) == 854);
 
     // Auto and unknown source size never force a transcode
     CHECK(!exceedsResolution(7680, 4320, 0));
@@ -39,12 +41,20 @@ int main() {
     CHECK(exceedsResolution(3840, 1600, 1080));  // 4K scope: too wide, fits in height
     CHECK(exceedsResolution(1920, 1088, 1080));
     CHECK(exceedsResolution(7680, 4320, 2160));
+    CHECK(!exceedsResolution(854, 480, 480));
 
     CHECK(resolutionBitrate(2160) == 20000000);
     CHECK(resolutionBitrate(1440) == 15000000);
     CHECK(resolutionBitrate(1080) == 8000000);
     CHECK(resolutionBitrate(720) == 4000000);
     CHECK(resolutionBitrate(480) == 1500000);
+
+    // 4K source, 1080p limit
+    CHECK(limitedBitrate(0, true, true, 3840, 2160, 1080) == 8000000);
+    CHECK(limitedBitrate(4000000, true, true, 3840, 2160, 1080) == 4000000);  // chosen quality kept
+    CHECK(limitedBitrate(0, false, true, 3840, 2160, 1080) == 0);             // toggle off: direct play
+    CHECK(limitedBitrate(0, true, false, 3840, 2160, 1080) == 0);             // no server transcoder
+    CHECK(limitedBitrate(0, true, true, 1920, 1080, 1080) == 0);              // fits: direct play
 
     if (failures) {
         printf("test_resolution: %d failure(s)\n", failures);

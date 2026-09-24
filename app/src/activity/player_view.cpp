@@ -322,9 +322,8 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
     // the Vita hardware H.264 decoder tops out at 1080p (scripts/vita/ffmpeg patch)
     if (opts.maxHeight <= 0 || opts.maxHeight > 1080) opts.maxHeight = 1080;
 #endif
-    if (MPVCore::RESOLUTION_LIMIT && opts.bitrateCap <= 0 && AppConfig::instance().backend().caps().transcode &&
-        media::exceedsResolution(this->stream.width, this->stream.height, opts.maxHeight))
-        opts.bitrateCap = media::resolutionBitrate(opts.maxHeight);
+    opts.bitrateCap = media::limitedBitrate(opts.bitrateCap, MPVCore::RESOLUTION_LIMIT,
+        AppConfig::instance().backend().caps().transcode, this->stream.width, this->stream.height, opts.maxHeight);
     opts.plainPartUrl = this->plainPartUrl;
     opts.audioStreamId = PlayerSetting::selectedAudio;
     opts.subtitleStreamId = PlayerSetting::selectedSubtitle;

@@ -394,7 +394,8 @@ bool AppConfig::init() {
     // default transcode bitrate cap. The Vita decoder chokes on heavy direct
     // play (high-bitrate / unsupported codecs -> slideshow), so default to a
     // smooth 4 Mbps H.264 transcode; "Auto" (0 = direct play) stays selectable
-    // in the player quality menu. Other platforms default to direct play.
+    // in the player quality menu. Other platforms default to direct play (the
+    // Switch still transcodes sources above its max resolution, below).
     // Persisted now (it was reset every launch, so the user's lowered choice
     // never survived a restart).
 #if defined(__PSV__)
