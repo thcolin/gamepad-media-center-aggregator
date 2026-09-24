@@ -80,6 +80,14 @@ inline HTTP::Header headers(const std::string& token) {
     };
 }
 
+/// Jellyfin serves user avatars at /UserImage only, Emby at /Users/{id}/Images only.
+inline std::string userImageUrl(
+    const std::string& baseUrl, const std::string& userId, const std::string& tag, bool emby) {
+    if (tag.empty()) return "";
+    if (emby) return fmt::format("{}/Users/{}/Images/Primary?tag={}&maxWidth=128", baseUrl, userId, tag);
+    return fmt::format("{}/UserImage?userId={}&tag={}", baseUrl, userId, tag);
+}
+
 /// Append the token as a query param (mpv/images/downloads consumed outside HTTP)
 inline std::string withToken(const std::string& url, const std::string& token) {
     if (token.empty()) return url;

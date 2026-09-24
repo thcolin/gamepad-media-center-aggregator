@@ -14,6 +14,7 @@ struct LoginResult {
     std::string token;       // AccessToken
     std::string userId;      // Jellyfin user Id (for /Users/{u}/...)
     std::string userName;
+    std::string userImageTag;  // User.PrimaryImageTag, empty without an avatar
     std::string serverId;
     std::string serverName;
 };
