@@ -123,9 +123,18 @@ inline media::Stream parseStream(const nlohmann::json& j) {
     s.forced = jbool(j, "IsForced");
     s.channels = (int)jint(j, "Channels");
     s.selected = jbool(j, "IsDefault");
-    // external subtitle: DeliveryUrl (sidecar)
-    if (jbool(j, "IsExternal")) s.key = jstr(j, "DeliveryUrl");
     return s;
+}
+
+/// Emby sets DeliveryUrl in PlaybackInfo only, never on an item's MediaStreams.
+/// Jellyfin names SRT "subrip", which is not a valid Stream.{format}.
+inline std::string subtitleKey(
+    const nlohmann::json& j, const std::string& itemId, const std::string& mediaSourceId, int index) {
+    std::string url = jstr(j, "DeliveryUrl");
+    if (!url.empty()) return url;
+    std::string format = jstr(j, "Codec");
+    if (format.empty() || format == "subrip") format = "srt";
+    return fmt::format("/Videos/{}/{}/Subtitles/{}/Stream.{}", itemId, mediaSourceId, index, format);
 }
 
 inline media::Media parseMediaSource(const nlohmann::json& j, const std::string& itemId, bool audio = false) {
@@ -147,6 +156,8 @@ inline media::Media parseMediaSource(const nlohmann::json& j, const std::string&
     if (j.contains("MediaStreams") && j["MediaStreams"].is_array()) {
         for (auto& s : j["MediaStreams"]) {
             media::Stream st = parseStream(s);
+            if (st.streamType == media::streamTypeSubtitle && jbool(s, "IsExternal"))
+                st.key = subtitleKey(s, itemId, msId.empty() ? itemId : msId, st.index);
             if (st.codec == "h264" || st.codec == "hevc" || st.codec == "av1")
                 m.videoCodec = st.codec;
             else if (st.streamType == media::streamTypeAudio && m.audioCodec.empty())
