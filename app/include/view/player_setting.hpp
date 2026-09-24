@@ -8,10 +8,11 @@
 #include <api/plex/types.hpp>
 
 class ButtonClose;
+class VideoView;
 
 class PlayerSetting : public brls::Box {
 public:
-    PlayerSetting();
+    explicit PlayerSetting(VideoView* video);
     ~PlayerSetting() override;
 
     bool isTranslucent() override { return true; }
@@ -44,6 +45,8 @@ private:
     BRLS_BIND(brls::BooleanCell, btnOSDOnToggle, "setting/player/osd_on_toggle");
     BRLS_BIND(brls::BooleanCell, btnFullscreen, "setting/fullscreen");
     BRLS_BIND(brls::BooleanCell, btnAlwaysOnTop, "setting/always_on_top");
+    BRLS_BIND(brls::SelectorCell, btnSpeed, "setting/video/speed");
+    BRLS_BIND(brls::SelectorCell, btnRepeat, "setting/video/repeat");
     BRLS_BIND(brls::SelectorCell, btnVideoMirror, "setting/video/mirror");
     BRLS_BIND(brls::SelectorCell, btnVideoRotation, "setting/video/rotation");
     BRLS_BIND(brls::SelectorCell, btnVideoAspect, "setting/video/aspect");

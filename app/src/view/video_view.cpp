@@ -36,6 +36,15 @@ static int getSeekRange(int current) {
 VideoView::VideoView() {
     this->inflateFromXMLRes("xml/view/video_view.xml");
     brls::Logger::debug("VideoView: created");
+    // mpv loop flags are global and MusicView leaves its own set: start the
+    // session without them and give them back on close
+    {
+        auto& mpv = MPVCore::instance();
+        this->loopFile = mpv.getString("loop-file");
+        this->loopPlaylist = mpv.getString("loop-playlist");
+        mpv.command("set", "loop-file", "no");
+        mpv.command("set", "loop-playlist", "no");
+    }
     this->setHideHighlightBorder(true);
     this->setHideHighlightBackground(true);
     this->setHideClickAnimation(true);
@@ -229,7 +238,7 @@ VideoView::VideoView() {
                 this->toggleOSD();
                 break;
             }
-            mpv.setSpeed(1.0f);
+            mpv.setSpeed(this->speed);
             this->speedHintBox->setVisibility(brls::Visibility::GONE);
             break;
         case OsdGestureType::HORIZONTAL_PAN_START:
@@ -350,8 +359,8 @@ VideoView::VideoView() {
     this->btnCast->registerClickAction([this](...) { return this->toggleProfile(); });
     this->btnCast->addGestureRecognizer(new brls::TapGestureRecognizer(this->btnCast));
 
-    /// speed: LSB shortcut + touch long-press only (no longer on the OSD,
-    /// not relevant there per user feedback)
+    /// speed: LSB shortcut, touch long-press and the settings menu; not on
+    /// the OSD, not relevant there per user feedback
     this->registerActions(
         "main/player/speed"_i18n, brls::BUTTON_LSB, KeyBind::getVideoSpeed(),
         [this](...) { return this->toggleSpeed(); }, true);
@@ -362,7 +371,10 @@ VideoView::~VideoView() {
     this->unRegisterMpvEvent();
     disableDimming(false);
 
-    MPVCore::instance().stop();
+    auto& mpv = MPVCore::instance();
+    mpv.stop();
+    if (!this->loopFile.empty()) mpv.command("set", "loop-file", this->loopFile.c_str());
+    if (!this->loopPlaylist.empty()) mpv.command("set", "loop-playlist", this->loopPlaylist.c_str());
 }
 
 void VideoView::setTitie(const std::string& title) { this->titleLabel->setText(title); }
@@ -384,6 +396,7 @@ void VideoView::setList(const std::vector<std::string>& values, int index) {
     this->btnEpisode->setVisibility(brls::Visibility::VISIBLE);
     this->showEpisodeLabel->setVisibility(brls::Visibility::VISIBLE);
 
+    this->listSize = (int)values.size();
     auto event = [this, values](int index) {
         this->playIndex = index;
 
@@ -619,6 +632,10 @@ void VideoView::registerMpvEvent() {
                 this->showOSD(false);
             }
             break;
+        case MpvEventEnum::MPV_LOADED:
+            // mpv resets speed on each file (reset-on-next-file)
+            if (this->speed != 1.0) mpv.setSpeed(this->speed);
+            break;
         case MpvEventEnum::LOADING_START:
             this->showLoading();
             break;
@@ -641,6 +658,9 @@ void VideoView::registerMpvEvent() {
             // 播放结束
             disableDimming(false);
             this->toggleIcon->setImageFromSVGRes("icon/ico-play.svg");
+            if (this->repeat == Repeat::One && this->replayAction && this->replayAction(this)) break;
+            if (this->repeat == Repeat::All && this->hasList() && this->playIndex + 1 >= this->listSize)
+                this->playIndex = -1;
             this->playIndexEvent.fire(++this->playIndex);
             break;
         case MpvEventEnum::CACHE_SPEED_CHANGE:
@@ -766,11 +786,32 @@ bool VideoView::toggleOSDLock() {
 
 bool VideoView::toggleSpeed() {
     brls::Dropdown* dropdown = new brls::Dropdown(
-        "main/player/speed"_i18n, {"2.0x", "1.75x", "1.5x", "1.25x", "1.0x", "0.75x", "0.5x"},
-        [](int selected) { MPVCore::instance().setSpeed((200 - selected * 25) / 100.0f); },
-        int(200 - MPVCore::instance().video_speed * 100) / 25);
+        "main/player/speed"_i18n, speedLabels(), [this](int selected) { this->setSpeed(SPEEDS.at(selected)); },
+        speedIndex(this->speed));
     brls::Application::pushActivity(new brls::Activity(dropdown));
     return true;
+}
+
+std::vector<std::string> VideoView::speedLabels() {
+    std::vector<std::string> labels;
+    for (double s : SPEEDS) labels.push_back(s == (int)s ? fmt::format("{:.1f}x", s) : fmt::format("{}x", s));
+    return labels;
+}
+
+int VideoView::speedIndex(double value) {
+    for (size_t i = 0; i < SPEEDS.size(); i++)
+        if (std::abs(SPEEDS[i] - value) < 0.01) return (int)i;
+    return (int)(std::find(SPEEDS.begin(), SPEEDS.end(), 1.0) - SPEEDS.begin());
+}
+
+void VideoView::setSpeed(double value) {
+    this->speed = value;
+    MPVCore::instance().setSpeed(value);
+}
+
+void VideoView::setRepeat(Repeat value) {
+    this->repeat = value;
+    if (!this->replayAction) MPVCore::instance().command("set", "loop-file", value == Repeat::One ? "inf" : "no");
 }
 
 bool VideoView::toggleVolume(brls::View* view) {
@@ -881,6 +922,8 @@ void VideoView::registerVideoAudio(brls::ActionListener action) {
 }
 
 void VideoView::registerError(brls::ActionListener action) { this->errorAction = action; }
+
+void VideoView::registerReplay(brls::ActionListener action) { this->replayAction = action; }
 
 void VideoView::registerActions(const std::string& hintText, const brls::ControllerButton button,
     const brls::BrlsKeyCombination key, const brls::ActionListener& actionListener, bool hidden, bool allowRepeating) {

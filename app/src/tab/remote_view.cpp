@@ -63,8 +63,8 @@ public:
             default:;
             }
         });
-        settingSubscribeID = view->getSettingEvent()->subscribe([]() {
-            brls::View* setting = new PlayerSetting();
+        settingSubscribeID = view->getSettingEvent()->subscribe([this]() {
+            brls::View* setting = new PlayerSetting(this->view);
             brls::Application::pushActivity(new brls::Activity(setting));
         });
     }
@@ -74,6 +74,9 @@ public:
         mpv.getEvent()->unsubscribe(eventSubscribeID);
         view->getPlayEvent()->unsubscribe(playSubscribeID);
         view->getSettingEvent()->unsubscribe(settingSubscribeID);
+        // the session speed and repeat must not be saved with the file
+        view->setSpeed(1.0);
+        view->setRepeat(VideoView::Repeat::None);
         mpv.command("write-watch-later-config");
     }
 

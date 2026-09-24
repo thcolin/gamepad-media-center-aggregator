@@ -51,7 +51,10 @@
     "direct_fallback": "转码失败，直接播放",
     "transcode_fallback": "直接播放失败，转码播放",
     "episode": "选集",
-    "speed_up": "{} 倍速播放中"
+    "speed_up": "{} 倍速播放中",
+    "repeat": "重复",
+    "repeat_one": "当前视频",
+    "repeat_all": "整个列表"
   },
   "media": {
     "sort": "排序",

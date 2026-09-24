@@ -51,7 +51,10 @@
     "direct_fallback": "Chuyển mã thất bại, đang phát trực tiếp",
     "transcode_fallback": "Phát trực tiếp thất bại, đang chuyển mã",
     "episode": "Tập",
-    "speed_up": "Tốc độ hiện tại {}"
+    "speed_up": "Tốc độ hiện tại {}",
+    "repeat": "Lặp lại",
+    "repeat_one": "Video này",
+    "repeat_all": "Toàn bộ danh sách"
   },
   "media": {
     "sort": "Sắp xếp",

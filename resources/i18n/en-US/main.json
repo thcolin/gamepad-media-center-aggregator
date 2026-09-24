@@ -55,7 +55,10 @@
     "direct_fallback": "Transcode failed, playing directly",
     "transcode_fallback": "Direct play failed, transcoding",
     "episode": "Episode",
-    "speed_up": "Current speed {}"
+    "speed_up": "Current speed {}",
+    "repeat": "Repeat",
+    "repeat_one": "This video",
+    "repeat_all": "Whole list"
   },
   "media": {
     "sort": "Sort",
