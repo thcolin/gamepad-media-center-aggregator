@@ -263,7 +263,9 @@
       "subsync": "Synchronizace titulků"
     },
     "transcode": {
-      "header": "Překódování"
+      "header": "Překódování",
+      "max_resolution": "Maximální rozlišení překódování",
+      "resolution_limit": "Omezit i přímé přehrávání"
     },
     "control": {
       "header": "Ovládání přehrávání",

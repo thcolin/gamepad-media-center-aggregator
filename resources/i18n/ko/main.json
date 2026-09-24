@@ -263,7 +263,9 @@
       "subsync": "자막 동기화"
     },
     "transcode": {
-      "header": "트랜스코딩"
+      "header": "트랜스코딩",
+      "max_resolution": "트랜스코딩 최대 해상도",
+      "resolution_limit": "직접 재생에도 적용"
     },
     "control": {
       "header": "재생 제어",

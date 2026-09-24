@@ -263,7 +263,9 @@
       "subsync": "Untertitel-Synchronisierung"
     },
     "transcode": {
-      "header": "Transkodierung"
+      "header": "Transkodierung",
+      "max_resolution": "Maximale Transkodierungsauflösung",
+      "resolution_limit": "Auch Direct Play begrenzen"
     },
     "control": {
       "header": "Wiedergabesteuerung",
