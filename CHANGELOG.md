@@ -9,6 +9,47 @@ prepared with [git-cliff](https://git-cliff.org/) from conventional commits
 hand. For the history of the upstream project this fork is based on, see the
 [Switchfin changelog](https://github.com/dragonflylee/switchfin/blob/dev/CHANGELOG.md).
 
+## [1.3.0] - 2026-09-24
+
+### Added
+
+- **Playback speed and repeat in the player settings (#68).** The cogwheel
+  menu has a Playback Speed selector, from 0.5x to 2.0x, and a Repeat
+  selector: Off, This video, or Whole list when the player has a list (the
+  episodes of a show, the videos of a remote folder). Both last until the
+  player closes, and carry over from one episode to the next.
+- **Maximum transcoding resolution (#67).** Settings > Transcode can cap the
+  transcode at 4K, 1440p, 1080p, 720p or 480p, for Plex, Jellyfin and Emby.
+  "Also limit direct play" transcodes a source larger than that limit instead
+  of playing it directly.
+
+### Fixed
+
+- **Emby: external subtitles, avatars, Anime libraries and album covers
+  (#65).** Sidecar subtitles load on Emby, and on Jellyfin when the server
+  gives no delivery URL. The profile avatar of Jellyfin and Emby users is
+  shown after the next sign-in. Mixed-content libraries, the usual type for
+  Anime, are listed in the sidebar. Album covers are requested resized, so
+  Emby no longer sends the original multi-megabyte image.
+- **Emby: transcoding failed with an HTTP 400 (#67).** The transcode request
+  now sends the selected media source instead of the item id.
+- **Jellyfin and Emby servers could stay offline after a restart (#77).** The
+  reconnect check now calls the server API instead of the web page, which a
+  proxy or a server setup can refuse while sign-in works.
+- **Downloads: posters and queue (#73).** Every queued episode shows its
+  poster, not only the running one. Thumbnails are written through a
+  temporary file, and interrupted downloads resume once the server is
+  reachable instead of waiting for a new download.
+- **A video no longer loops because a song was on repeat.** Each video
+  session starts with mpv's loop settings cleared.
+
+### Changed
+
+- **Switch: 4K sources are transcoded to 1080p by default (#67).** New
+  installs and existing ones get the 1080p limit with "Also limit direct
+  play" on. Set the limit to Auto to play 4K files directly again. Other
+  platforms keep Auto.
+
 ## [1.2.0] - 2026-09-24
 
 ### Added
