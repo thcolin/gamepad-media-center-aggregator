@@ -415,9 +415,7 @@ media::PlaybackSource PlexBackend::resolvePlayback(
                     "videoCodec={}&audioCodec=aac,ac3,mp3&replace=true)",
             opts.videoCodec),
     };
-    // The bitrate cap alone lets a >1080p source through at higher qualities
-    // (verified: 8 Mbps keeps 1080p, a 4K source stays 4K), so the output size
-    // gets its own bound: the user's max resolution, or the Vita decoder ceiling
+    // the bitrate cap alone keeps a 4K source at 4K
     if (opts.maxHeight > 0) {
         form["videoResolution"] = fmt::format("{}x{}", media::resolutionBoxWidth(opts.maxHeight), opts.maxHeight);
         clauses.push_back(fmt::format(

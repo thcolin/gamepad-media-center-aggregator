@@ -402,8 +402,7 @@ bool AppConfig::init() {
 #else
     MPVCore::VIDEO_QUALITY = this->getItem(PLAYER_VIDEO_QUALITY, (int64_t)0);
 #endif
-    // the Switch cannot keep up with sources above 1080p (8K test files from
-    // issue #67), so it transcodes them down by default
+    // sources above 1080p overwhelm the Switch: transcode them down by default
 #if defined(__SWITCH__)
     MPVCore::MAX_RESOLUTION = this->getItem(PLAYER_MAX_RESOLUTION, 1080);
     MPVCore::RESOLUTION_LIMIT = this->getItem(PLAYER_RESOLUTION_LIMIT, true);

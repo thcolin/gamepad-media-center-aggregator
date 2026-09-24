@@ -1,4 +1,4 @@
-// Standalone logic test — max playback resolution (issue #67).
+// Standalone logic test — max playback resolution.
 //
 //   c++ -std=gnu++17 -arch x86_64 -Iapp/include tests/test_resolution.cpp -o /tmp/t && /tmp/t
 //
@@ -38,7 +38,7 @@ int main() {
     CHECK(exceedsResolution(3840, 2160, 1080));
     CHECK(exceedsResolution(3840, 1600, 1080));  // 4K scope: too wide, fits in height
     CHECK(exceedsResolution(1920, 1088, 1080));
-    CHECK(exceedsResolution(7680, 4320, 2160));  // the issue's 8K test file on a 4K limit
+    CHECK(exceedsResolution(7680, 4320, 2160));
 
     CHECK(resolutionBitrate(2160) == 20000000);
     CHECK(resolutionBitrate(1440) == 15000000);
