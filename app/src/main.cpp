@@ -193,6 +193,8 @@ int main(int argc, char* argv[]) {
                 brls::Application::clear();
                 if (logged) {
                     brls::Application::pushActivity(new MainActivity(), brls::TransitionAnimation::NONE);
+                    // downloads interrupted by the last exit (init() re-queued them)
+                    DownloadManager::instance().resumeQueue();
 #if defined(__SWITCH__) && defined(BUILTIN_NSP)
                     proposeForwarderInstall();
 #endif
