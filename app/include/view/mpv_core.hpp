@@ -160,6 +160,8 @@ public:
 #endif
     inline static std::string VIDEO_CODEC = "h264";
     inline static int64_t VIDEO_QUALITY = 0;
+    inline static int MAX_RESOLUTION = 0;  // transcode height limit; 0 = auto
+    inline static bool RESOLUTION_LIMIT = false;  // also transcode direct play above MAX_RESOLUTION
 
     inline static bool FORCE_DIRECTPLAY = false;
 

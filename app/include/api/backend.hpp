@@ -62,6 +62,7 @@ struct PlaybackOptions {
     int64_t audioStreamId = 0;     // selected audio stream id (0 = default)
     int64_t subtitleStreamId = 0;  // selected subtitle stream id (0 = none)
     int64_t bitrateCap = 0;        // bps cap; <= 0 = direct play / auto
+    int maxHeight = 0;             // transcode output limit, a 16:9 box (media/resolution.hpp); 0 = none
     bool forceDirectPlay = false;
     bool plainPartUrl = false;     // direct play on the bare part URL instead of the download one (Plex)
     bool burnSubtitles = false;

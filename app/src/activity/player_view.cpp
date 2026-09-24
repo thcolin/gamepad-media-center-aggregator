@@ -10,6 +10,7 @@
 #include "activity/player_view.hpp"
 #include "api/plex.hpp"
 #include "api/backend.hpp"
+#include "api/media/resolution.hpp"
 #include "utils/dialog.hpp"
 #include "utils/misc.hpp"
 #include "view/mpv_core.hpp"
@@ -316,6 +317,16 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
     // forceDirect: the transcode->direct-play fallback re-resolves with direct
     // play forced (resolvePlayback returns the direct source when set).
     opts.forceDirectPlay = MPVCore::FORCE_DIRECTPLAY || forceDirect;
+    opts.maxHeight = MPVCore::MAX_RESOLUTION;
+#if defined(__PSV__)
+    // the Vita hardware H.264 decoder tops out at 1080p (scripts/vita/ffmpeg patch)
+    if (opts.maxHeight <= 0 || opts.maxHeight > 1080) opts.maxHeight = 1080;
+#endif
+    // a source larger than the limit is transcoded down instead of played
+    // directly; an explicit quality choice keeps its own bitrate
+    if (MPVCore::RESOLUTION_LIMIT && opts.bitrateCap <= 0 && AppConfig::instance().backend().caps().transcode &&
+        media::exceedsResolution(this->stream.width, this->stream.height, opts.maxHeight))
+        opts.bitrateCap = media::resolutionBitrate(opts.maxHeight);
     opts.plainPartUrl = this->plainPartUrl;
     opts.audioStreamId = PlayerSetting::selectedAudio;
     opts.subtitleStreamId = PlayerSetting::selectedSubtitle;

@@ -275,7 +275,9 @@
       "subsync": "Subtitle Sync"
     },
     "transcode": {
-      "header": "Transcode"
+      "header": "Transcode",
+      "max_resolution": "Maximum transcoding resolution",
+      "resolution_limit": "Also limit direct play"
     },
     "control": {
       "header": "Playback Control",

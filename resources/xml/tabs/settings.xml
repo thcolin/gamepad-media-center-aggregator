@@ -81,6 +81,10 @@
                     id="setting/video/directplay" />
                 <brls:SelectorCell
                     id="setting/transcode/codec" />
+                <brls:SelectorCell
+                    id="setting/transcode/max_resolution" />
+                <brls:BooleanCell
+                    id="setting/transcode/resolution_limit" />
             </brls:Box>
 
             <brls:Header
