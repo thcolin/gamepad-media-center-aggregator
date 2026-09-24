@@ -453,12 +453,22 @@ void DownloadManager::doDownload(DownloadItem& item) {
         }
 
         if (!thumb.empty() && !cancel->load()) {
+            // written to a temp then renamed: the list reads thumb.png on the UI
+            // thread and must never open a half-written file
+            std::string thumbPath = itemDir + "/thumb.png";
+            std::string tmp = thumbPath + ".part";
             try {
-                // thumbnail
-                std::string thumbUrl = AppConfig::instance().backend().imageUrl(thumb);
-                HTTP::download(thumbUrl, itemDir + "/thumb.png", HTTP::Timeout{});
+                std::string thumbUrl = AppConfig::instance().backend().imageUrl(thumb, 225);
+                HTTP::download(thumbUrl, tmp, HTTP::Timeout{});
+                // rename does not replace an existing file on Switch (version.cpp)
+                if (fs::exists(thumbPath)) fs::remove(thumbPath);
+                fs::rename(tmp, thumbPath);
             } catch (const std::exception& e) {
                 brls::Logger::warning("Failed to download thumbnail: {}", e.what());
+                try {
+                    fs::remove(tmp);
+                } catch (...) {
+                }
             }
         }
 

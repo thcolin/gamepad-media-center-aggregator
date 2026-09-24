@@ -1,6 +1,7 @@
 #include <borealis.hpp>
 #include "utils/offline_ui.hpp"
 #include "utils/config.hpp"
+#include "utils/download.hpp"
 #include "utils/network_state.hpp"
 #include "activity/main_activity.hpp"
 
@@ -16,6 +17,7 @@ void offline_ui::tryReconnect() {
                 NetworkState::setOffline(false);
                 brls::Application::clear();
                 brls::Application::pushActivity(new MainActivity(), brls::TransitionAnimation::NONE);
+                DownloadManager::instance().resumeQueue();
             } else {
                 brls::Application::notify("main/download/still_offline"_i18n);
             }
