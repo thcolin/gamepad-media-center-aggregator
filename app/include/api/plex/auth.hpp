@@ -10,6 +10,7 @@
 #pragma once
 
 #include "api/plex/types.hpp"
+#include <functional>
 
 namespace plex {
 
@@ -54,8 +55,12 @@ std::vector<std::string> rankConnections(const ServerResource& server);
 /// connect timeout before a reachable remote/relay endpoint was even tried, so a
 /// roaming connect stalled for many seconds or gave up (GH #36). Priority is
 /// still honoured — a lower-ranked candidate wins only once every better one has
-/// failed. Shared by every backend (Plex/Jellyfin/Emby) via the reconnect paths.
+/// failed. Probes each candidate with probeConnection.
 std::string raceConnections(const std::vector<std::string>& urls, const std::string& accessToken);
+
+/// Same race with the backend's own `probe` (Jellyfin/Emby answer on their API,
+/// not on the Plex root).
+std::string raceConnections(const std::vector<std::string>& urls, const std::function<bool(const std::string&)>& probe);
 
 /// Picks the best connection for a server: races `preferredUri` (if any) ahead
 /// of the ranked candidates and returns the first reachable base URL, or "".

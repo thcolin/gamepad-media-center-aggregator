@@ -143,8 +143,12 @@ bool probeConnection(const std::string& baseUrl, const std::string& accessToken,
 }
 
 std::string raceConnections(const std::vector<std::string>& urls, const std::string& accessToken) {
+    return raceConnections(urls, [accessToken](const std::string& url) { return probeConnection(url, accessToken); });
+}
+
+std::string raceConnections(const std::vector<std::string>& urls, const std::function<bool(const std::string&)>& probe) {
     if (urls.empty()) return "";
-    if (urls.size() == 1) return probeConnection(urls.front(), accessToken) ? urls.front() : "";
+    if (urls.size() == 1) return probe(urls.front()) ? urls.front() : "";
 
     // Probe every candidate at once on the shared thread pool, then return the
     // best-ranked one that answers. Priority is preserved without waiting on
@@ -163,13 +167,13 @@ std::string raceConnections(const std::vector<std::string>& urls, const std::str
 
     for (size_t i = 0; i < urls.size(); i++) {
         std::string url = urls[i];
-        ThreadPool::instance().submit([state, url, accessToken, i](HTTP&) {
+        ThreadPool::instance().submit([state, url, probe, i](HTTP&) {
             // Guard against any stray throw so status[i] is always decided and
-            // the waiter below never blocks forever (probeConnection already
-            // swallows std::exception; this covers the pathological rest).
+            // the waiter below never blocks forever (the probes already
+            // swallow std::exception; this covers the pathological rest).
             Status result = Unreachable;
             try {
-                if (probeConnection(url, accessToken)) result = Reachable;
+                if (probe(url)) result = Reachable;
             } catch (...) {
             }
             {
