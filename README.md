@@ -155,7 +155,7 @@ grab the Flatpak or the desktop package from the latest release.
 GMCA reads your existing library, logins and downloads automatically on first launch — nothing to re-configure.
 
 **Subtitles don't show up on Switch?**
-Drop any TrueType font at `sdmc:/switch/GMCA/subfont.ttf`.
+Drop any TrueType font at `sdmc:/switch/GMCA/subfont.ttf`. The PS4 build installs a default subtitle font automatically; to use your own, replace `/data/GMCA/subfont.ttf` with any TrueType font.
 
 **macOS won't open the app?**
 Clear the quarantine attribute:

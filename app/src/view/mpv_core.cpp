@@ -7,6 +7,9 @@
 #include "utils/misc.hpp"
 #include "utils/log_redact.hpp"
 #include "api/http.hpp"
+#ifdef __PS4__
+#include "utils/default_font.hpp"
+#endif
 #include <cstring>
 #include <fmt/ranges.h>
 
@@ -137,6 +140,23 @@ void MPVCore::init() {
     mpv_set_option_string(mpv, "config", "yes");
     mpv_set_option_string(mpv, "config-dir", confDir.c_str());
     mpv_set_option_string(mpv, "sub-fonts-dir", confDir.c_str());
+#ifdef __PS4__
+    // the PS4 libass has no font provider: {config}/subfont.ttf is its only fallback
+    // font, so install the bundled one unless the user put their own there
+    {
+        const std::string subfont = confDir + "/subfont.ttf";
+        switch (DefaultFont::install(BRLS_ASSET("font/switch_font.ttf"), subfont)) {
+        case DefaultFont::Result::Installed:
+            brls::Logger::info("Subtitle font installed: {}", subfont);
+            break;
+        case DefaultFont::Result::Failed:
+            brls::Logger::error("Subtitle font install failed: {}", subfont);
+            break;
+        default:
+            break;
+        }
+    }
+#endif
     mpv_set_option_string(mpv, "watch-later-dir", fmt::format("{}/watch-later", confDir).c_str());
     mpv_set_option_string(mpv, "gpu-shader-cache-dir", fmt::format("{}/cache", confDir).c_str());
     mpv_set_option_string(mpv, "ytdl", "no");
