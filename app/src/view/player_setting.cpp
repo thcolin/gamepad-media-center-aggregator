@@ -180,16 +180,7 @@ PlayerSetting::PlayerSetting(VideoView* video) {
         },
         MPVCore::VIDEO_FILTER, [&mpv](int value) {
             MPVCore::VIDEO_FILTER = value;
-            switch (value) {
-            case 1:
-                mpv.command("set", "vf", "hflip");
-                break;
-            case 2:
-                mpv.command("set", "vf", "vflip");
-                break;
-            default:
-                mpv.command("set", "vf", "");
-            }
+            mpv.setMirror(value);
             // 如果正在使用硬解，那么将硬解更新为 auto-copy，避免直接硬解因为不经过 cpu 处理导致镜像翻转无效
             if (MPVCore::HARDWARE_DEC) {
                 const char* hwdec = value > 0 ? "auto-copy" : MPVCore::PLAYER_HWDEC_METHOD.c_str();

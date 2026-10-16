@@ -72,6 +72,9 @@ public:
 
     std::unordered_map<std::string, mpv_node> getNodeMap(const std::string &key);
 
+    /// The mirror setting (0 off, 1 horizontal, 2 vertical), keeping the HDR re-tag filter (PS4).
+    void setMirror(int mirror);
+
     void togglePlay();
 
     void stop();
@@ -184,6 +187,16 @@ private:
     bool video_paused = false;
     bool voEnabled = true;  // false in audio-only mode (music): keep playing when backgrounded
     int64_t cache_speed = 0;  // Bps
+
+#ifdef __PS4__
+    // HDR video (view/hdr_options.hpp): every file goes through a filter that re-tags it as SDR,
+    // in the chain from the start. While a PQ file plays, saturation and contrast are raised; the
+    // viewer's own values are kept here to put back when the file ends.
+    void applyHdrHandling();
+    bool hdr_active = false;
+    int hdr_base_saturation = 0;
+    int hdr_base_contrast = 0;
+#endif
 
 #ifdef MPV_SW_RENDER
     const int PIXCEL_SIZE = 4;
