@@ -61,9 +61,19 @@ int Ums::init() {
 }
 
 #elif defined(__PS4__)
+#include <dirent.h>
+#include <string>
 
 int Ums::init() {
     this->devices.push_back(Device{.id = -1, .name = "HardDisk", .mount = "/data"});
+    // USB drives the console mounted: /mnt/usb0 .. /mnt/usb7, those that open as folders
+    for (int i = 0; i < 8; i++) {
+        std::string mount = "/mnt/usb" + std::to_string(i);
+        if (DIR* d = opendir(mount.c_str())) {
+            closedir(d);
+            this->devices.push_back(Device{.id = -1, .name = "USB " + std::to_string(i + 1), .mount = mount});
+        }
+    }
     return 0;
 }
 

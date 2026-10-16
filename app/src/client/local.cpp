@@ -5,6 +5,11 @@
 
 #include <chrono>
 
+#ifdef __PS4__
+#include "client/posix_list.hpp"
+#include <borealis/core/logger.hpp>
+#endif
+
 namespace remote {
 
 static bool iequals(const std::string& a, const std::string& b) {
@@ -33,6 +38,29 @@ static fs::path childDir(const fs::path& parent, const std::string& name) {
 // filesystem error simply means "not a Blu-ray" — detection must never break
 // a plain directory listing.
 static std::string findBlurayStream(const std::string& dir) {
+#ifdef __PS4__
+    // std::filesystem fails on the PS4 (fstatat is a stub): the same detection with the helpers that work
+    std::string err;
+    auto top = posix_list::list(dir, err);
+    auto sub = [](const std::vector<posix_list::Entry>& es, const std::string& name) -> std::string {
+        for (auto& e : es)
+            if (e.dir && iequals(e.name, name)) return e.name;
+        return "";
+    };
+    std::string bd = sub(top, "BDMV");
+    if (bd.empty()) return "";
+    auto inBd = posix_list::list(dir + "/" + bd, err);
+    std::string st = sub(inBd, "STREAM");
+    if (st.empty()) return "";
+    std::string streamPath = dir + "/" + bd + "/" + st;
+    for (auto& e : posix_list::list(streamPath, err)) {
+        size_t dot = e.name.rfind('.');
+        std::string ext = dot == std::string::npos ? "" : e.name.substr(dot);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        if (!e.dir && (ext == ".m2ts" || ext == ".mts")) return streamPath;
+    }
+    return "";
+#else
     try {
         fs::path bdmv = childDir(dir, "BDMV");
         if (bdmv.empty()) return "";
@@ -46,6 +74,7 @@ static std::string findBlurayStream(const std::string& dir) {
     } catch (const std::exception&) {
     }
     return "";
+#endif
 }
 
 std::vector<DirEntry> Local::list(const std::string& path) {
@@ -64,6 +93,20 @@ std::vector<DirEntry> Local::list(const std::string& path) {
         s.push_back(bd);
     }
 
+#ifdef __PS4__
+    std::string err;
+    for (auto& e : posix_list::list(p, err)) {
+        DirEntry item;
+        item.name = e.name;
+        item.path = (p.empty() || p.back() == '/' ? p : p + "/") + e.name;
+        item.type = e.dir ? EntryType::DIR : EntryType::FILE;
+        if (!e.dir) item.fileSize = e.size;
+        s.push_back(item);
+    }
+    if (!err.empty()) brls::Logger::warning("Files: {}", err);
+    brls::Logger::info("Files: {} lists {} entries", p, s.size() - 1);
+    return s;
+#else
     auto it = fs::directory_iterator(p);
     for (const auto& fp : it) {
         DirEntry item;
@@ -87,6 +130,7 @@ std::vector<DirEntry> Local::list(const std::string& path) {
         s.push_back(item);
     }
     return s;
+#endif
 }
 
 }  // namespace remote

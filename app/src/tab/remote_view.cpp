@@ -1,4 +1,7 @@
 #include "tab/remote_view.hpp"
+#ifdef __PS4__
+#include "client/posix_list.hpp"
+#endif
 #include "view/recycling_grid.hpp"
 #include "view/svg_image.hpp"
 #include "view/icon_button.hpp"
@@ -442,8 +445,12 @@ private:
     /// True if the browser path points at an existing directory (issue #24).
     static bool folderExists(const std::string& path) {
         std::string p = path.rfind("file://") == 0 ? path.substr(7) : path;
+#ifdef __PS4__
+        return remote::posix_list::isFolder(p);  // std::filesystem's stat calls fail there
+#else
         std::error_code ec;
         return fs::is_directory(p, ec);
+#endif
     }
 
     DirList list;
