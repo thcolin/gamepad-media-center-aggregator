@@ -106,6 +106,7 @@ private:
     int64_t meta0ReqMs_ = 0;
     PeerConnection* metaPeer_ = nullptr;  // the one peer the info dict is fetched from
     int64_t metaProgressMs_ = 0;
+    int64_t metaPickedMs_ = 0;
     std::unordered_set<PeerConnection*> metaTried_;
 
     std::unique_ptr<PieceStore> store_;

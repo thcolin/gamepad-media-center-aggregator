@@ -106,6 +106,7 @@ private:
     bool peerChoking_ = true;
     bool amInterested_ = false;
     int outstanding_ = 0;
+    int64_t lastPexInMs_ = 0;
 
     std::vector<uint8_t> peerHas_;  // 1 byte per piece, empty until the metadata
     std::string pendingBitfield_;   // received before the metadata

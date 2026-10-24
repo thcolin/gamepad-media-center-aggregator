@@ -485,6 +485,10 @@ void PeerConnection::handleExtended(const uint8_t* data, int len) {
     }
 
     if (extId == kUtPexLocalId) {
+        // BEP-11: one message a minute at most; more is a flood
+        int64_t now = nowMs();
+        if (lastPexInMs_ && now - lastPexInMs_ < 60000) return;
+        lastPexInMs_ = now;
         bencode::Value v;
         size_t pos = 0;
         if (!bencode::decode(body, (size_t)blen, pos, v) || !v.isDict()) return;

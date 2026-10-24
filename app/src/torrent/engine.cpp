@@ -161,7 +161,9 @@ void TorrentEngine::enqueuePeers(const std::vector<PeerAddr>& peers) {
     constexpr size_t kMaxKnownPeers = 10000, kMaxPendingPeers = 2000;
     std::lock_guard<std::mutex> lk(peersMutex_);
     for (const auto& a : peers) {
-        if (knownPeers_.size() >= kMaxKnownPeers || pendingPeers_.size() >= kMaxPendingPeers) break;
+        if (knownPeers_.size() >= kMaxKnownPeers) break;
+        // full: the oldest pending entries go, so a flood cannot lock newer sources out
+        if (pendingPeers_.size() >= kMaxPendingPeers) pendingPeers_.erase(pendingPeers_.begin());
         std::string key = a.str();
         if (knownPeers_.count(key)) continue;
         knownPeers_.insert(key);
@@ -288,7 +290,8 @@ void TorrentEngine::scheduleMetadataRequests() {
     int64_t now = nowMs();
     // One peer serves the whole info dict, so a failed hash names the one who lied.
     bool usable = metaPeer_ && metaPeer_->alive() && metaPeer_->ready();
-    if (usable && now - metaProgressMs_ > 10000) {
+    // a peer trickling one piece every few seconds must not eat open()'s 60 s
+    if (usable && (now - metaProgressMs_ > 10000 || now - metaPickedMs_ > 20000)) {
         metaTried_.insert(metaPeer_);
         usable = false;
     }
@@ -310,6 +313,7 @@ void TorrentEngine::scheduleMetadataRequests() {
         resetMetadata();
         metaPeer_ = next;
         metaProgressMs_ = now;
+        metaPickedMs_ = now;
     }
 
     if (metadataSize_ == 0) {
