@@ -668,13 +668,15 @@ inline int parseSeeders(const std::string& text) {
             return n;
         }
     }
-    // "seed", "seeds", "seeders", case-insensitive, number after or before the word
+    // "seeds", "seeder", "seeders", case-insensitive, number after or before the word;
+    // a bare "seed" is a title word ("The Bad Seed 2018")
     std::string low = text;
     for (auto& c : low) c = (char)std::tolower((unsigned char)c);
-    size_t p = low.find("seed");
-    if (p != std::string::npos) {
+    for (size_t p = low.find("seed"); p != std::string::npos; p = low.find("seed", p + 4)) {
         size_t i = p + 4;
         while (i < low.size() && std::isalpha((unsigned char)low[i])) ++i;  // rest of the word
+        std::string word = low.substr(p, i - p);
+        if (word != "seeds" && word != "seeder" && word != "seeders") continue;
         size_t j = i;
         while (j < low.size() && (low[j] == ' ' || low[j] == ':')) ++j;
         if (j < low.size() && std::isdigit((unsigned char)low[j])) {

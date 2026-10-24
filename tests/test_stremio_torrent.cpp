@@ -23,6 +23,7 @@ int main() {
     CHECK(stremio::parseSeeders("Seeders: 7") == 7);
     CHECK(stremio::parseSeeders("1080p 300 seeders") == 300);
     CHECK(stremio::parseSeeders("1080p WEB-DL") == -1);
+    CHECK(stremio::parseSeeders("The Bad Seed 2018 1080p") == -1);
     CHECK(stremio::parseSeeders("\xF0\x9F\x91\xA4 99999999999999999999") > 0);
 
     // a Torrentio-style infoHash stream becomes a playable torrent row
