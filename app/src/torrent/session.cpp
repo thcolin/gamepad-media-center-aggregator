@@ -1,5 +1,6 @@
 #include "torrent/session.hpp"
 
+#include <algorithm>
 #include <cctype>
 
 #include <borealis/core/logger.hpp>
@@ -28,15 +29,40 @@ std::string percentEncode(const std::string& s) {
     return out;
 }
 
+// Addons often send a bare infoHash with no tracker hint, and a cold DHT search
+// rarely finds metadata in time. List from amansingh909's PS4 build, reliable first:
+// trackers are announced one after the other.
+const char* const kDefaultTrackers[] = {
+    "udp://tracker.opentrackr.org:1337/announce",
+    "udp://open.stealth.si:80/announce",
+    "udp://explodie.org:6969/announce",
+    "udp://tracker.torrent.eu.org:451/announce",
+    "udp://open.demonii.com:1337/announce",
+    "udp://exodus.desync.com:6969/announce",
+    "udp://tracker.tiny-vps.com:6969/announce",
+    "udp://tracker.dler.org:6969/announce",
+    "udp://opentracker.io:6969/announce",
+    "udp://tracker.theoks.net:6969/announce",
+    "udp://tracker-udp.gbitt.info:80/announce",
+    "udp://tracker.qu.ax:6969/announce",
+    "udp://tracker.filemail.com:6969/announce",
+    "http://tracker.opentrackr.org:1337/announce",
+    "http://tracker.bt4g.com:2095/announce",
+};
+
 std::string buildMagnet(const std::string& infoHash, const std::vector<std::string>& sources) {
     std::string magnet = "magnet:?xt=urn:btih:" + infoHash;
+    std::vector<std::string> trackers;
     for (const auto& src : sources) {
         if (src.rfind("tracker:", 0) == 0) {
             std::string url = src.substr(std::string("tracker:").size());
-            if (!url.empty()) magnet += "&tr=" + percentEncode(url);
+            if (!url.empty()) trackers.push_back(url);
         }
         // "dht:" hints are ignored: the engine searches the DHT by infohash (off on Vita)
     }
+    for (const char* t : kDefaultTrackers)
+        if (std::find(trackers.begin(), trackers.end(), t) == trackers.end()) trackers.push_back(t);
+    for (const auto& url : trackers) magnet += "&tr=" + percentEncode(url);
     return magnet;
 }
 
