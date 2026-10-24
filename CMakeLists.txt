@@ -404,4 +404,7 @@ endif ()
 
 if (ENABLE_TORRENT)
     add_subdirectory(torrent)
+    target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/app/src/torrent/session.cpp)
+    target_link_libraries(${PROJECT_NAME} PRIVATE torrent_engine)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ENABLE_TORRENT)
 endif ()

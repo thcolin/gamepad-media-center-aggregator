@@ -365,6 +365,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DPLATFORM_DESKTOP=ON \
           -DUSE_SYSTEM_GLFW=ON \
+          -DENABLE_TORRENT=ON \
           -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
           -DCMAKE_OSX_DEPLOYMENT_TARGET=${{ matrix.target }} \
           -DVERSION_BUILD=${{ github.run_number }}

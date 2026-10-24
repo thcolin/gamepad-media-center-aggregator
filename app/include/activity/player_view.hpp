@@ -133,4 +133,14 @@ private:
     brls::VoidEvent::Subscription settingSubscribeID;
     MPVCustomEvent::Subscription customEventSubscribeID;
     VideoView* view = nullptr;
+
+#if defined(ENABLE_TORRENT)
+    /// Engine status in the central loading box, from resolvePlayback until playback starts.
+    void showTorrentLoading();
+    void updateTorrentLoading();
+    void hideTorrentLoading();
+
+    brls::RepeatingTimer torrentTicker;
+    bool torrentBuffering = false;
+#endif
 };

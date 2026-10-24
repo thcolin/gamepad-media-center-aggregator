@@ -23,6 +23,9 @@
 #include "api/stremio/auth.hpp"
 #include "api/media/langs.hpp"
 #include "utils/config.hpp"
+#if defined(ENABLE_TORRENT)
+#include "torrent/session.hpp"
+#endif
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
 #include <borealis/core/i18n.hpp>
@@ -961,6 +964,16 @@ media::PlaybackSource StremioBackend::resolvePlayback(
     // empty url means no playable source -> the player shows a "playback failed"
     // dialog. We never throw: a cross-TU throw on the borealis async task loop
     // (which does not wrap tasks in try/catch) would abort the app.
+#if defined(ENABLE_TORRENT)
+    if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty()) {
+        // Blocks on the metadata, on the player's async worker. PlayerView closes the engine.
+        std::string url = torrent::EngineSession::instance().open(
+            version.infoHash, version.torrentFileIdx, version.torrentSources);
+        if (url.empty()) return {};
+        std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
+        return {url, extra, false, "directplay"};
+    }
+#endif
     if (version.parts.empty() || version.parts.front().key.empty()) return {};
     std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += ",http-proxy=\"" + HTTP::PROXY + "\"";

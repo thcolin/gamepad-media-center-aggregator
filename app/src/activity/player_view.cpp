@@ -19,6 +19,9 @@
 #include "view/video_view.hpp"
 #include "view/video_profile.hpp"
 #include "view/audio_player.hpp"
+#if defined(ENABLE_TORRENT)
+#include "torrent/session.hpp"
+#endif
 
 using namespace brls::literals;
 
@@ -95,6 +98,9 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
             break;
         case MpvEventEnum::LOADING_END:
             this->reportTimeline("playing", this->mediaTimeMs(mpv.playback_time));
+#if defined(ENABLE_TORRENT)
+            this->hideTorrentLoading();
+#endif
             break;
         case MpvEventEnum::MPV_STOP:
             this->mpvLoaded = false;
@@ -119,6 +125,10 @@ PlayerView::PlayerView(const plex::Item& item, const int64_t seekMs, int version
             break;
         }
         case MpvEventEnum::UPDATE_PROGRESS:
+#if defined(ENABLE_TORRENT)
+            // in case LOADING_END was missed
+            if (this->torrentBuffering && mpv.video_progress > 0) this->hideTorrentLoading();
+#endif
             // report cadence: every 10 s
             if (mpv.video_progress % 10 == 0) {
                 this->reportTimeline("playing", this->mediaTimeMs(mpv.video_progress));
@@ -170,6 +180,10 @@ PlayerView::~PlayerView() {
     if (!mpv.isStopped()) this->reportStop();
     // Free the server-side transcode session on exit (else it lingers orphaned).
     this->stopTranscode();
+#if defined(ENABLE_TORRENT)
+    this->hideTorrentLoading();  // its ticker captures this
+    torrent::EngineSession::instance().close();
+#endif
     brls::Application::getExitEvent()->unsubscribe(this->exitSubscribeID);
     brls::Logger::debug("trying delete PlayerView...");
 }
@@ -239,6 +253,10 @@ void PlayerView::playMedia(const int64_t seekMs) {
     // Without it each reload orphaned a server-side session (verified on dev:
     // they stack up at ~0% progress and never free), starving new transcodes.
     this->stopTranscode();
+#if defined(ENABLE_TORRENT)
+    // one engine at a time: a new torrent source opens its own in resolvePlayback
+    torrent::EngineSession::instance().close();
+#endif
     // deliberate (re)start: allow the playback fallbacks to trigger again
     this->directPlayFallback = false;
     this->transcodeFallback = false;
@@ -252,6 +270,10 @@ void PlayerView::playMedia(const int64_t seekMs) {
         auto accessible = [](const plex::Media& m) {
             for (auto& p : m.parts)
                 if (p.accessible && p.exists && !p.key.empty()) return true;
+#if defined(ENABLE_TORRENT)
+            // a torrent gets its URL from the engine in resolvePlayback
+            if (m.kind == media::SourceKind::Torrent && !m.infoHash.empty()) return true;
+#endif
             return false;
         };
         if (this->preferredVersion >= 0 && this->preferredVersion < (int)this->item.media.size() &&
@@ -277,6 +299,9 @@ void PlayerView::playMedia(const int64_t seekMs) {
             auto accessible = [](const plex::Media& m) {
                 for (auto& p : m.parts)
                     if (p.accessible && p.exists && !p.key.empty()) return true;
+#if defined(ENABLE_TORRENT)
+                if (m.kind == media::SourceKind::Torrent && !m.infoHash.empty()) return true;
+#endif
                 return false;
             };
             if (this->preferredVersion >= 0 && this->preferredVersion < (int)this->item.media.size() &&
@@ -340,6 +365,14 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
     // copies for the worker thread (avoids racing on this->item during a switch)
     media::Item item = this->item;
     media::Media version = this->stream;
+
+#if defined(ENABLE_TORRENT)
+    // resolvePlayback blocks while the engine finds the metadata and peers, before mpv has a URL
+    if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty())
+        this->showTorrentLoading();
+    else
+        this->hideTorrentLoading();
+#endif
 
     ASYNC_RETAIN
     brls::async([ASYNC_TOKEN, item, version, opts]() {
@@ -575,3 +608,44 @@ bool PlayerView::toggleQuality() {
     brls::Application::pushActivity(new brls::Activity(dropdown));
     return true;
 }
+
+#if defined(ENABLE_TORRENT)
+
+void PlayerView::showTorrentLoading() {
+    this->torrentBuffering = true;
+    this->view->setCenterLoadingMessage("main/stremio/source/torrent_buffering"_i18n);
+    this->torrentTicker.setCallback([this]() { this->updateTorrentLoading(); });
+    this->torrentTicker.start(800);
+    this->updateTorrentLoading();
+}
+
+void PlayerView::updateTorrentLoading() {
+    if (!this->torrentBuffering) return;
+    torrent::Stats st = torrent::EngineSession::instance().stats();
+
+    std::string text;
+    if (!st.metadataReady || st.peersConnected == 0) {
+        text = "main/stremio/source/torrent_buffering"_i18n;
+    } else {
+        std::string speed =
+            st.downloadRateBps > 0 ? misc::formatSize((uint64_t)st.downloadRateBps) + "/s" : "0KB/s";
+        int pct = st.piecesTotal > 0 ? (int)(100.0 * st.piecesHave / st.piecesTotal) : 0;
+        std::string peers =
+            fmt::format(fmt::runtime("main/stremio/source/torrent_peers"_i18n), st.peersConnected);
+        text = fmt::format("\xF0\x9F\x8C\x90 {}  \xC2\xB7  \xE2\xAC\x87 {}  \xC2\xB7  {}%", peers, speed, pct);
+    }
+    this->view->setCenterLoadingMessage(text);
+
+    brls::Logger::debug(
+        "torrent buffering: meta={} peers={}/{} rate={:.0f}B/s pieces={}/{} contiguous={}B webseeds={}",
+        st.metadataReady, st.peersConnected, st.peersKnown, st.downloadRateBps, st.piecesHave, st.piecesTotal,
+        st.contiguousReadyBytes, st.webSeeds);
+}
+
+void PlayerView::hideTorrentLoading() {
+    if (!this->torrentBuffering) return;
+    this->torrentBuffering = false;
+    this->torrentTicker.stop();
+    this->view->clearCenterLoadingMessage();
+}
+#endif

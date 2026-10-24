@@ -664,6 +664,9 @@ void VideoView::registerMpvEvent() {
             this->playIndexEvent.fire(++this->playIndex);
             break;
         case MpvEventEnum::CACHE_SPEED_CHANGE:
+#if defined(ENABLE_TORRENT)
+            if (this->centerMessageLatched) break;
+#endif
             // 仅当加载圈已经开始转起的情况显示缓存
             if (this->osdCenterBox->getVisibility() != brls::Visibility::GONE) {
                 if (this->centerLabel->getVisibility() != brls::Visibility::VISIBLE)
@@ -704,10 +707,28 @@ void VideoView::unRegisterMpvEvent() {
 
 // Loading
 void VideoView::showLoading() {
-    this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
+#if defined(ENABLE_TORRENT)
+    if (!this->centerMessageLatched)
+#endif
+        this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
     this->osdCenterBox->setVisibility(brls::Visibility::VISIBLE);
     disableDimming(false);
 }
+
+#if defined(ENABLE_TORRENT)
+void VideoView::setCenterLoadingMessage(const std::string& text) {
+    this->centerMessageLatched = true;
+    this->osdCenterBox->setVisibility(brls::Visibility::VISIBLE);
+    this->centerLabel->setVisibility(brls::Visibility::VISIBLE);
+    this->centerLabel->setText(text);
+}
+
+// the center box itself goes on LOADING_END, through hideLoading()
+void VideoView::clearCenterLoadingMessage() {
+    this->centerMessageLatched = false;
+    this->centerLabel->setVisibility(brls::Visibility::INVISIBLE);
+}
+#endif
 
 void VideoView::hideLoading(bool dimming) {
     this->osdCenterBox->setVisibility(brls::Visibility::GONE);

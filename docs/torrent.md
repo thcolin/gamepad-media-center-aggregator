@@ -29,14 +29,20 @@ one playback.
 
 ## App integration
 
-The app does not link the engine yet. Stremio `infoHash` streams are still
-classified as `SourceKind::Torrent` and are not playable
-(`app/include/api/stremio/types.hpp`, `app/include/api/media/types.hpp`).
+With `ENABLE_TORRENT=ON`, the app links `torrent_engine` and compiles
+`app/src/torrent/session.cpp` (`CMakeLists.txt`, end of file).
 
-`app/src/torrent/session.cpp` holds `torrent::EngineSession`, a singleton that
-builds a magnet from the infohash and the addon `tracker:` hints and keeps one
-engine open at a time. No target compiles it today: the app GLOB excludes it and
-`torrent/CMakeLists.txt` does not list it.
+- `stremio::streamToMedia` turns an `infoHash` stream into a playable
+  `SourceKind::Torrent` row with no part, carrying the infohash, the file index and
+  the addon `sources` hints (`app/include/api/stremio/types.hpp`).
+- `StremioBackend::resolvePlayback` asks `torrent::EngineSession` for a local URL.
+  The session builds a magnet from the infohash and the `tracker:` hints, keeps one
+  engine open at a time, and blocks on the metadata, on the player's async worker.
+- `PlayerView` shows the engine status in the central loading box until playback
+  starts, and closes the session on a new source or when the player goes away.
+- A torrent row has no download action (`app/src/tab/media_movie.cpp`).
+
+With the option off, none of this is compiled.
 
 ## Architecture
 

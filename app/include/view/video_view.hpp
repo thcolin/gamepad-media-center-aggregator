@@ -85,6 +85,14 @@ public:
     void setRepeat(Repeat value);
     bool hasList() const { return this->listSize > 1; }
 
+#if defined(ENABLE_TORRENT)
+    /// Torrent status in the central loading box, from before mpv has the URL
+    /// until clearCenterLoadingMessage(): LOADING_START and the cache-speed line
+    /// leave it alone.
+    void setCenterLoadingMessage(const std::string& text);
+    void clearCenterLoadingMessage();
+#endif
+
     static bool close(bool quit = false);
 
 private:
@@ -162,6 +170,9 @@ private:
     // OSD
     bool isOsdShown = false;
     bool isOsdLock = false;
+#if defined(ENABLE_TORRENT)
+    bool centerMessageLatched = false;  // see setCenterLoadingMessage
+#endif
     brls::Time osdLastShowTime = 0;
     brls::Time hintLastShowTime = 0;
     brls::Time profileLastShowTime = 0;
