@@ -6,8 +6,14 @@
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#if defined(__PS4__)
+#ifndef SO_NOSIGPIPE
+#define SO_NOSIGPIPE 0x0800  // FreeBSD value, missing from OpenOrbis
+#endif
+#endif
 #endif
 
 #include <algorithm>
@@ -126,6 +132,9 @@ bool HttpServer::start(uint16_t port) {
     struct sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
+#if defined(__PS4__)
+    addr.sin_len = sizeof(addr);
+#endif
     addr.sin_port = htons(port);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
     if (::bind(listenFd_, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
@@ -149,17 +158,21 @@ bool HttpServer::start(uint16_t port) {
 void HttpServer::stop() {
     running_ = false;
     store_.stop();  // unblocks readFile in the client threads
-    if (listenFd_ >= 0) {
 #if defined(__vita__)
+    if (listenFd_ >= 0) {
         sceNetShutdown(listenFd_, SCE_NET_SHUT_RDWR);
         sceNetSocketClose(listenFd_);
-#else
-        ::shutdown(listenFd_, SHUT_RDWR);
-        ::close(listenFd_);
-#endif
         listenFd_ = -1;
     }
     if (thread_.joinable()) thread_.join();
+#else
+    // the accept loop polls running_ every 200 ms; close the socket once it is out
+    if (thread_.joinable()) thread_.join();
+    if (listenFd_ >= 0) {
+        ::close(listenFd_);
+        listenFd_ = -1;
+    }
+#endif
     // Clients may be blocked sending to mpv: shut their sockets so they return,
     // they reference this server and the store the engine frees next.
     std::list<Client> clients;
@@ -181,7 +194,17 @@ void HttpServer::acceptLoop() {
 #if defined(__vita__)
         int fd = sceNetAccept(listenFd_, nullptr, nullptr);
 #else
+        // close() from stop() does not wake a blocked accept() on FreeBSD (PS4)
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(listenFd_, &rfds);
+        struct timeval tv = {0, 200 * 1000};
+        if (::select(listenFd_ + 1, &rfds, nullptr, nullptr, &tv) <= 0) continue;
         int fd = ::accept(listenFd_, nullptr, nullptr);
+#if defined(__PS4__)
+        int one = 1;
+        if (fd >= 0) ::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
 #endif
         if (fd < 0) {
             if (!running_) break;

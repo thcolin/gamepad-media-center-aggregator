@@ -342,10 +342,28 @@ std::vector<std::string> resolve(const std::string& host) {
     return out;
 }
 
+#if defined(__PS4__)
+// OpenOrbis pairs musl's Linux constants with the FreeBSD kernel: O_NONBLOCK
+// means something else there, and FIONBIO and SO_NOSIGPIPE are missing.
+#include <sys/ioctl.h>
+#ifndef FIONBIO
+#define FIONBIO 0x8004667e
+#endif
+#ifndef SO_NOSIGPIPE
+#define SO_NOSIGPIPE 0x0800
+#endif
+static bool setNonBlocking(int fd) {
+    int on = 1;
+    return ::ioctl(fd, FIONBIO, &on) == 0;
+}
+static void fillLen(struct sockaddr_in& a) { a.sin_len = sizeof(a); }
+#else
 static bool setNonBlocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     return flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
+static void fillLen(struct sockaddr_in&) {}
+#endif
 
 TcpSocket::~TcpSocket() { close(); }
 TcpSocket::TcpSocket(TcpSocket&& o) noexcept : fd(o.fd) { o.fd = -1; }
@@ -368,6 +386,9 @@ bool TcpSocket::open() {
     }
     int one = 1;
     ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+#if defined(__PS4__)
+    ::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
     return true;
 }
 
@@ -375,6 +396,7 @@ bool TcpSocket::startConnect(const std::string& ip, uint16_t port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
+    fillLen(addr);
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) != 1) return false;
     int r = ::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
@@ -429,6 +451,7 @@ int UdpSocket::sendTo(const std::string& ip, uint16_t port, const void* data, si
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
+    fillLen(addr);
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, ip.c_str(), &addr.sin_addr) != 1) return -1;
     ssize_t n = ::sendto(fd, data, len, 0, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr));
