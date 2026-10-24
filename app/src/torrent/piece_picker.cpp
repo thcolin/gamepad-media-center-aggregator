@@ -118,10 +118,14 @@ void PiecePicker::tick() {
     int64_t now = nowMs();
     for (auto it = inflight_.begin(); it != inflight_.end();) {
         int piece = (int)(it->first >> 24);
-        if (now - it->second.sentMs > deadlineMsForPiece(piece, playhead))
+        if (now - it->second.sentMs > deadlineMsForPiece(piece, playhead)) {
+            // a single-source owner that lets a request expire loses the piece
+            auto single = singleSource_.find(piece);
+            if (single != singleSource_.end() && single->second == it->second.peer) single->second = nullptr;
             it = inflight_.erase(it);  // re-picked next round
-        else
+        } else {
             ++it;
+        }
     }
 }
 
