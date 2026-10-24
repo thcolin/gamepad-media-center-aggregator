@@ -211,8 +211,8 @@ std::string buildCatalogUrl(const std::string& base, const std::string& type, co
 /// playable sources (torrent/external/youtube) by quality. The order is stable
 /// so the index the detail page shows matches the one PlayerView re-resolves at
 /// play time. Debrid addons resolve infoHash -> a real url server-side, landing
-/// here as a playable Direct/Debrid row; infoHash-only/ytId/externalUrl stay
-/// non-playable (no local torrent client / browser on console).
+/// here as a playable Direct/Debrid row; an infoHash-only stream is playable only
+/// with the torrent engine built in (ENABLE_TORRENT); ytId/externalUrl never are.
 std::vector<media::Media> resolveAllStreams(
     AddonEngine& engine, const std::string& stremioType, const std::string& stremioId) {
     std::vector<media::Media> all;
