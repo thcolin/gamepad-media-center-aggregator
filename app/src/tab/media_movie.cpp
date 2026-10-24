@@ -434,11 +434,11 @@ void MediaMovie::buildSources(const media::Item& item) {
         std::vector<brls::View*> cells;
         // quality chip
         cells.push_back(sourcePill(m.videoResolution.empty() ? "SD" : m.videoResolution, pillBg, textCol));
-        // status chip: torrent (gold) / cached debrid (gold) / uncached debrid / direct
+        // status chip: torrent / cached debrid (gold) / uncached debrid / direct
 #if defined(ENABLE_TORRENT)
         bool torrentRow = m.kind == media::SourceKind::Torrent;
         if (torrentRow)
-            cells.push_back(sourcePill("main/stremio/source/torrent_badge"_i18n, goldBg, goldFg));
+            cells.push_back(sourcePill("main/stremio/source/torrent_badge"_i18n, pillBg, textCol));
         else
 #endif
         if (m.kind == media::SourceKind::Debrid)
