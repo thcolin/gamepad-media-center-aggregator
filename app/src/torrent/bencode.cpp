@@ -31,6 +31,7 @@ static bool decodeInt(const uint8_t* data, size_t len, size_t& pos, int64_t& out
     if (pos >= len || data[pos] < '0' || data[pos] > '9') return false;
     int64_t v = 0;
     while (pos < len && data[pos] >= '0' && data[pos] <= '9') {
+        if (v > (INT64_MAX - 9) / 10) return false;
         v = v * 10 + (data[pos] - '0');
         ++pos;
     }
@@ -38,8 +39,12 @@ static bool decodeInt(const uint8_t* data, size_t len, size_t& pos, int64_t& out
     return true;
 }
 
-bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) {
-    if (pos >= len) return false;
+// Peers, trackers and DHT nodes send bencode: bound the recursion so a deeply
+// nested message cannot exhaust a console thread stack.
+constexpr int kMaxDepth = 64;
+
+static bool decodeAt(const uint8_t* data, size_t len, size_t& pos, Value& out, int depth) {
+    if (pos >= len || depth > kMaxDepth) return false;
     size_t start = pos;
     uint8_t c = data[pos];
 
@@ -53,11 +58,12 @@ bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) {
         int64_t slen = 0;
         while (pos < len && data[pos] >= '0' && data[pos] <= '9') {
             slen = slen * 10 + (data[pos] - '0');
+            if (slen > (int64_t)len) return false;
             ++pos;
         }
         if (pos >= len || data[pos] != ':') return false;
         ++pos;
-        if (slen < 0 || pos + (size_t)slen > len) return false;
+        if ((size_t)slen > len - pos) return false;
         out.type = Value::Type::Str;
         out.s.assign(reinterpret_cast<const char*>(data + pos), (size_t)slen);
         pos += (size_t)slen;
@@ -66,7 +72,7 @@ bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) {
         out.type = Value::Type::List;
         while (pos < len && data[pos] != 'e') {
             Value child;
-            if (!decode(data, len, pos, child)) return false;
+            if (!decodeAt(data, len, pos, child, depth + 1)) return false;
             out.list.push_back(std::move(child));
         }
         if (pos >= len) return false;
@@ -76,9 +82,9 @@ bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) {
         out.type = Value::Type::Dict;
         while (pos < len && data[pos] != 'e') {
             Value key;
-            if (!decode(data, len, pos, key) || key.type != Value::Type::Str) return false;
+            if (!decodeAt(data, len, pos, key, depth + 1) || key.type != Value::Type::Str) return false;
             Value val;
-            if (!decode(data, len, pos, val)) return false;
+            if (!decodeAt(data, len, pos, val, depth + 1)) return false;
             out.dict.emplace(std::move(key.s), std::move(val));
         }
         if (pos >= len) return false;
@@ -91,6 +97,8 @@ bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) {
     out.end = pos;
     return true;
 }
+
+bool decode(const uint8_t* data, size_t len, size_t& pos, Value& out) { return decodeAt(data, len, pos, out, 0); }
 
 bool decode(const std::string& buf, Value& out) {
     size_t pos = 0;
