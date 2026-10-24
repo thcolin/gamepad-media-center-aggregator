@@ -629,10 +629,9 @@ void PlayerView::updateTorrentLoading() {
     } else {
         std::string speed =
             st.downloadRateBps > 0 ? misc::formatSize((uint64_t)st.downloadRateBps) + "/s" : "0KB/s";
-        int pct = st.piecesTotal > 0 ? (int)(100.0 * st.piecesHave / st.piecesTotal) : 0;
         std::string peers =
             fmt::format(fmt::runtime("main/stremio/source/torrent_peers"_i18n), st.peersConnected);
-        text = fmt::format("\xF0\x9F\x8C\x90 {}  \xC2\xB7  \xE2\xAC\x87 {}  \xC2\xB7  {}%", peers, speed, pct);
+        text = fmt::format("\xF0\x9F\x8C\x90 {}  \xC2\xB7  \xE2\xAC\x87 {}", peers, speed);
     }
     this->view->setCenterLoadingMessage(text);
 
