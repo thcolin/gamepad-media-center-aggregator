@@ -255,7 +255,8 @@ endif ()
 
 if (USE_LIBUSBHSFS)
     find_library(USBHSFS_LIB NAMES usbhsfs REQUIRED)
-    list(APPEND APP_PLATFORM_LIB lwext4 ntfs-3g usbhsfs)
+    # usbhsfs uses lwext4 and ntfs-3g: a group resolves them in any order
+    list(APPEND APP_PLATFORM_LIB -Wl,--start-group lwext4 ntfs-3g usbhsfs -Wl,--end-group)
     list(APPEND APP_PLATFORM_OPTION -DUSE_LIBUSBHSFS)
 endif ()
 
