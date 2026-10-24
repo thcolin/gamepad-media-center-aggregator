@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstdint>
 #include <cstring>
 
@@ -33,7 +35,12 @@ bool parseUrl(const std::string& url, Url& out) {
     size_t colon = hostport.rfind(':');
     if (colon != std::string::npos) {
         out.host = hostport.substr(0, colon);
-        out.port = (uint16_t)std::stoi(hostport.substr(colon + 1));
+        // Addon-supplied URL: a bad port must fail the parse, not throw on the announcer thread.
+        std::string p = hostport.substr(colon + 1);
+        if (p.empty() || p.size() > 5 || !std::all_of(p.begin(), p.end(), ::isdigit)) return false;
+        int port = std::atoi(p.c_str());
+        if (port <= 0 || port > 65535) return false;
+        out.port = (uint16_t)port;
     } else {
         out.host = hostport;
         out.port = (out.scheme == "https") ? 443 : (out.scheme == "http" ? 80 : 0);
