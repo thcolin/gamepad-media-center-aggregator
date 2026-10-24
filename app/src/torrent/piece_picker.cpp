@@ -44,6 +44,12 @@ std::vector<PiecePicker::BlockRequest> PiecePicker::pickForPeer(
         if (store_.have(p)) return;
         if (needRoom && !store_.hasRoomFor(p)) return;
         int blocks = store_.blocksInPiece(p);
+        auto single = singleSource_.find(p);
+        if (single != singleSource_.end()) {
+            if (endgame) return;
+            if (single->second && single->second != peerTag) return;
+            single->second = peerTag;
+        }
         for (int b = 0; b < blocks && (int)out.size() < count; b++) {
             if (store_.blockReceived(p, b)) continue;
             int64_t k = key(p, b * PieceStore::kBlockSize);
@@ -77,12 +83,28 @@ std::vector<PiecePicker::BlockRequest> PiecePicker::pickForPeer(
 
 void PiecePicker::gotBlock(int piece, int32_t begin) { inflight_.erase(key(piece, begin)); }
 
+void PiecePicker::setSingleSource(int piece, bool on) {
+    if (on)
+        singleSource_[piece] = nullptr;
+    else
+        singleSource_.erase(piece);
+}
+
+bool PiecePicker::requestedFrom(int piece, int32_t begin, int len, const void* peerTag) const {
+    auto it = inflight_.find(key(piece, begin));
+    if (it == inflight_.end() || it->second.peer != peerTag) return false;
+    int64_t plen = store_.pieceLength(piece);
+    return len == (int)std::min<int64_t>(PieceStore::kBlockSize, plen - begin);
+}
+
 void PiecePicker::abandonBlock(int piece, int32_t begin, const void* peerTag) {
     auto it = inflight_.find(key(piece, begin));
     if (it != inflight_.end() && it->second.peer == peerTag) inflight_.erase(it);
 }
 
 void PiecePicker::releasePeer(const void* peerTag) {
+    for (auto& s : singleSource_)
+        if (s.second == peerTag) s.second = nullptr;
     for (auto it = inflight_.begin(); it != inflight_.end();) {
         if (it->second.peer == peerTag)
             it = inflight_.erase(it);

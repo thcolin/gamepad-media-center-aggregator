@@ -23,6 +23,10 @@ public:
     /// `peerHas` holds 1 byte per piece; chosen blocks are marked in flight for `peerTag`.
     std::vector<BlockRequest> pickForPeer(const std::vector<uint8_t>& peerHas, int count, const void* peerTag);
 
+    /// A block a peer sends must answer our request to it, with the requested length.
+    bool requestedFrom(int piece, int32_t begin, int len, const void* peerTag) const;
+    /// After a hash failure with several senders: fetch the piece again from one peer only.
+    void setSingleSource(int piece, bool on);
     void gotBlock(int piece, int32_t begin);
 
     void abandonBlock(int piece, int32_t begin, const void* peerTag);
@@ -51,6 +55,7 @@ private:
     PieceStore& store_;
     EngineConfig cfg_;
     std::unordered_map<int64_t, InFlight> inflight_;
+    std::unordered_map<int, const void*> singleSource_;  // piece -> the one peer fetching it
 };
 
 }  // namespace torrent

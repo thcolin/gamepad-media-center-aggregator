@@ -26,7 +26,7 @@ struct PeerHost {
 
     virtual void onPeerHandshake(PeerConnection*) = 0;
     virtual void onPeerBlock(PeerConnection*, int piece, int32_t begin, const uint8_t* data, int len) = 0;
-    virtual void onMetadataPiece(int piece, int64_t totalSize, const uint8_t* data, int len) = 0;
+    virtual void onMetadataPiece(PeerConnection* from, int piece, int64_t totalSize, const uint8_t* data, int len) = 0;
     virtual void onPexPeers(const std::vector<PeerAddr>&) = 0;
 };
 

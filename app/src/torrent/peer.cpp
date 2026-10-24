@@ -25,7 +25,8 @@ constexpr int kMsgExtended = 20;
 constexpr int kExtHandshakeId = 0;
 constexpr int64_t kConnectTimeoutMs = 8000;
 constexpr int64_t kKeepAliveMs = 110000;
-constexpr int kMaxMessageLen = 1 << 20;  // 1 MiB guard (piece blocks are 16 KiB)
+constexpr int kMaxMessageLen = 1 << 16;  // blocks are 16 KiB, a 200k-piece bitfield 25 KB
+constexpr size_t kMaxReadBurst = 1 << 20;  // a full request pipeline is 256 KiB
 
 void put32(std::string& s, uint32_t v) {
     s += (char)(v >> 24);
@@ -141,7 +142,7 @@ void PeerConnection::onReadable() {
         int n = transport_->recv(buf, sizeof(buf));
         if (n > 0) {
             raw.append(buf, (size_t)n);
-            if (raw.size() > (size_t)kMaxMessageLen * 4) {
+            if (raw.size() > kMaxReadBurst) {
                 close();
                 return;
             }
@@ -474,9 +475,11 @@ void PeerConnection::handleExtended(const uint8_t* data, int len) {
         int piece = (int)v.intAt("piece", -1);
         if (msgType == 1 && piece >= 0) {
             int64_t totalSize = v.intAt("total_size", peerMetadataSize_);
+            // a size that disagrees with the peer's own handshake is a lie
+            if (peerMetadataSize_ > 0 && totalSize != peerMetadataSize_) return;
             const uint8_t* mdata = body + pos;
             int mlen = blen - (int)pos;
-            if (mlen > 0) host_->onMetadataPiece(piece, totalSize, mdata, mlen);
+            if (mlen > 0) host_->onMetadataPiece(this, piece, totalSize, mdata, mlen);
         }
         return;
     }
@@ -489,7 +492,8 @@ void PeerConnection::handleExtended(const uint8_t* data, int len) {
         if (added && added->isStr()) {
             std::vector<PeerAddr> peers;
             const std::string& s = added->s;
-            for (size_t i = 0; i + 6 <= s.size(); i += 6) {
+            // BEP-11 caps a message at 50 added peers
+            for (size_t i = 0; i + 6 <= s.size() && peers.size() < 50; i += 6) {
                 const uint8_t* p = reinterpret_cast<const uint8_t*>(s.data() + i);
                 char ip[INET_ADDRSTRLEN];
                 struct in_addr a;

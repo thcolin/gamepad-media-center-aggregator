@@ -62,7 +62,7 @@ public:
     int64_t metadataTotalSize() const override { return metadataSize_; }
     void onPeerHandshake(PeerConnection*) override;
     void onPeerBlock(PeerConnection*, int piece, int32_t begin, const uint8_t* data, int len) override;
-    void onMetadataPiece(int piece, int64_t totalSize, const uint8_t* data, int len) override;
+    void onMetadataPiece(PeerConnection* from, int piece, int64_t totalSize, const uint8_t* data, int len) override;
     void onPexPeers(const std::vector<PeerAddr>&) override;
 
 private:
@@ -82,6 +82,7 @@ private:
     void scheduleBlockRequests();
     void schedulePex();
     void onMetadataComplete();
+    void resetMetadata();
     void startDataStage(int fileIdx);
     void updateStats();
 
@@ -103,6 +104,9 @@ private:
     std::vector<int64_t> metaRequestedMs_;
     int metaPiecesGot_ = 0;
     int64_t meta0ReqMs_ = 0;
+    PeerConnection* metaPeer_ = nullptr;  // the one peer the info dict is fetched from
+    int64_t metaProgressMs_ = 0;
+    std::unordered_set<PeerConnection*> metaTried_;
 
     std::unique_ptr<PieceStore> store_;
     std::unique_ptr<PiecePicker> picker_;
@@ -122,7 +126,6 @@ private:
     std::unordered_set<std::string> knownPeers_;
     // engine thread only
     std::unordered_map<int, std::unordered_set<PeerConnection*>> contributors_;
-    std::unordered_map<PeerConnection*, int> hashStrikes_;
     // engine thread only; attemptTried_ keeps each carrier/encryption rung to one dial per endpoint
     std::vector<PeerAttempt> retryQueue_;
     std::unordered_set<std::string> attemptTried_;

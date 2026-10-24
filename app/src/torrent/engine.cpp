@@ -157,8 +157,11 @@ void TorrentEngine::startDataStage(int fileIdx) {
 // ---- peer discovery ---------------------------------------------------------
 
 void TorrentEngine::enqueuePeers(const std::vector<PeerAddr>& peers) {
+    // PEX, DHT and trackers are all remote input: bound what they can make us hold
+    constexpr size_t kMaxKnownPeers = 10000, kMaxPendingPeers = 2000;
     std::lock_guard<std::mutex> lk(peersMutex_);
     for (const auto& a : peers) {
+        if (knownPeers_.size() >= kMaxKnownPeers || pendingPeers_.size() >= kMaxPendingPeers) break;
         std::string key = a.str();
         if (knownPeers_.count(key)) continue;
         knownPeers_.insert(key);
@@ -240,7 +243,8 @@ void TorrentEngine::connectPending() {
                 if (picker_) picker_->releasePeer(it->get());
             }
             for (auto& c : contributors_) c.second.erase(it->get());
-            hashStrikes_.erase(it->get());
+            metaTried_.erase(it->get());
+            if (metaPeer_ == it->get()) metaPeer_ = nullptr;
             it = peers_.erase(it);
         } else {
             ++it;
@@ -271,33 +275,60 @@ void TorrentEngine::connectPending() {
 
 // ---- metadata (BEP-9) -------------------------------------------------------
 
-void TorrentEngine::scheduleMetadataRequests() {
-    std::vector<PeerConnection*> capable;
-    for (auto& p : peers_)
-        if (p->ready() && p->utMetadataId() > 0) capable.push_back(p.get());
-    if (capable.empty()) return;
-    int64_t now = nowMs();
+void TorrentEngine::resetMetadata() {
+    metadataSize_ = 0;
+    metaPiecesGot_ = 0;
+    metaBuf_.clear();
+    metaReceived_.clear();
+    metaRequestedMs_.clear();
+    meta0ReqMs_ = 0;
+}
 
-    if (metaNumPieces_ == 0 && metadataSize_ == 0) {
+void TorrentEngine::scheduleMetadataRequests() {
+    int64_t now = nowMs();
+    // One peer serves the whole info dict, so a failed hash names the one who lied.
+    bool usable = metaPeer_ && metaPeer_->alive() && metaPeer_->ready();
+    if (usable && now - metaProgressMs_ > 10000) {
+        metaTried_.insert(metaPeer_);
+        usable = false;
+    }
+    if (!usable) {
+        PeerConnection* next = nullptr;
+        bool anyCapable = false;
+        for (auto& p : peers_) {
+            if (!p->ready() || p->utMetadataId() <= 0) continue;
+            anyCapable = true;
+            if (!metaTried_.count(p.get())) {
+                next = p.get();
+                break;
+            }
+        }
+        if (!next) {
+            if (anyCapable) metaTried_.clear();  // every one stalled: go round again
+            return;
+        }
+        resetMetadata();
+        metaPeer_ = next;
+        metaProgressMs_ = now;
+    }
+
+    if (metadataSize_ == 0) {
         // the reply to piece 0 carries total_size
         if (now - meta0ReqMs_ > 3000) {
-            capable[0]->sendMetadataRequest(0);
+            metaPeer_->sendMetadataRequest(0);
             meta0ReqMs_ = now;
         }
         return;
     }
-    int rr = 0;
     for (int i = 0; i < (int)metaReceived_.size(); i++) {
-        if (metaReceived_[i]) continue;
-        if (now - metaRequestedMs_[i] < 3000) continue;
-        capable[rr % capable.size()]->sendMetadataRequest(i);
+        if (metaReceived_[i] || now - metaRequestedMs_[i] < 3000) continue;
+        metaPeer_->sendMetadataRequest(i);
         metaRequestedMs_[i] = now;
-        rr++;
     }
 }
 
-void TorrentEngine::onMetadataPiece(int piece, int64_t totalSize, const uint8_t* data, int len) {
-    if (metadataReady_) return;
+void TorrentEngine::onMetadataPiece(PeerConnection* from, int piece, int64_t totalSize, const uint8_t* data, int len) {
+    if (metadataReady_ || from != metaPeer_) return;
     if (metadataSize_ == 0 && totalSize > 0 && totalSize <= kMaxMetadataSize) {
         metadataSize_ = totalSize;
         int count = (int)((totalSize + kMetadataPieceSize - 1) / kMetadataPieceSize);
@@ -306,7 +337,7 @@ void TorrentEngine::onMetadataPiece(int piece, int64_t totalSize, const uint8_t*
         metaRequestedMs_.assign(count, 0);
         logInfo("engine: metadata size %lld bytes (%d pieces)", (long long)totalSize, count);
     }
-    if (metadataSize_ == 0) return;
+    if (metadataSize_ == 0 || totalSize != metadataSize_) return;
     int count = (int)metaReceived_.size();
     if (piece < 0 || piece >= count || metaReceived_[piece]) return;
     int64_t off = (int64_t)piece * kMetadataPieceSize;
@@ -316,19 +347,17 @@ void TorrentEngine::onMetadataPiece(int piece, int64_t totalSize, const uint8_t*
     std::memcpy(metaBuf_.data() + off, data, (size_t)copy);
     metaReceived_[piece] = 1;
     metaPiecesGot_++;
+    metaProgressMs_ = nowMs();
     if (metaPiecesGot_ == count) onMetadataComplete();
 }
 
 void TorrentEngine::onMetadataComplete() {
     std::string raw(reinterpret_cast<char*>(metaBuf_.data()), metaBuf_.size());
     if (!parseInfoDict(raw, infoHash_, meta_)) {
-        logError("engine: metadata failed verification/parse — resetting to re-fetch");
-        // The size came from one peer too: forget it, or a lying peer stalls the torrent for good.
-        metadataSize_ = 0;
-        metaPiecesGot_ = 0;
-        metaBuf_.clear();
-        metaReceived_.clear();
-        metaRequestedMs_.clear();
+        logError("engine: metadata from %s failed verification, peer dropped", metaPeer_->addr().str().c_str());
+        metaPeer_->close();
+        metaPeer_ = nullptr;
+        resetMetadata();
         return;
     }
     logInfo("engine: metadata verified — '%s' %lld bytes, %d files", meta_.name.c_str(), (long long)meta_.totalLength,
@@ -357,22 +386,33 @@ void TorrentEngine::onPeerHandshake(PeerConnection* peer) {
 
 void TorrentEngine::onPeerBlock(PeerConnection* peer, int piece, int32_t begin, const uint8_t* data, int len) {
     if (!store_) return;
+    {
+        // unsolicited blocks would allocate whole pieces and poison them
+        std::lock_guard<std::mutex> lk(pickerMutex_);
+        if (!picker_ || piece < 0 || piece >= store_->numPieces() || !picker_->requestedFrom(piece, begin, len, peer))
+            return;
+    }
     auto r = store_->addBlock(piece, begin, data, len);
     if (r == PieceStore::AddResult::Accepted || r == PieceStore::AddResult::Complete ||
         r == PieceStore::AddResult::BadHash)
         contributors_[piece].insert(peer);
     if (r == PieceStore::AddResult::BadHash) {
-        // A peer alone behind a bad piece is lying; with several, the second strike decides.
-        // A closed peer is never dialed again (knownPeers_).
         auto& who = contributors_[piece];
-        for (PeerConnection* p : who)
-            if (who.size() == 1 || ++hashStrikes_[p] >= 2) {
-                logWarn("engine: peer %s sent a bad piece %d, dropped", p->addr().str().c_str(), piece);
-                p->close();
-            }
+        std::lock_guard<std::mutex> lk(pickerMutex_);
+        if (who.size() == 1) {
+            // a closed peer is never dialed again (knownPeers_)
+            logWarn("engine: peer %s sent a bad piece %d, dropped", peer->addr().str().c_str(), piece);
+            peer->close();
+            if (picker_) picker_->setSingleSource(piece, false);
+        } else if (picker_) {
+            // several senders: fetch it again from one, so the next failure names the liar
+            picker_->setSingleSource(piece, true);
+        }
         contributors_.erase(piece);
     } else if (r == PieceStore::AddResult::Complete) {
         contributors_.erase(piece);
+        std::lock_guard<std::mutex> lk(pickerMutex_);
+        if (picker_) picker_->setSingleSource(piece, false);
     }
     std::lock_guard<std::mutex> lk(pickerMutex_);
     if (picker_) picker_->gotBlock(piece, begin);
