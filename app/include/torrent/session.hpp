@@ -31,7 +31,7 @@ public:
     bool active() const;
 
 private:
-    EngineSession() = default;
+    EngineSession();
     void joinPending();
 
     mutable std::mutex mutex_;

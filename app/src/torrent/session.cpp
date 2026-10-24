@@ -2,7 +2,10 @@
 
 #include <cctype>
 
+#include <borealis/core/logger.hpp>
+
 #include "torrent/engine.hpp"
+#include "torrent/log.hpp"
 
 namespace torrent {
 
@@ -38,6 +41,18 @@ std::string buildMagnet(const std::string& infoHash, const std::vector<std::stri
 }
 
 }  // namespace
+
+EngineSession::EngineSession() {
+    // engine logs go to the app log, the one a bug report carries
+    setLogSink([](LogLevel level, const std::string& msg) {
+        switch (level) {
+        case LogLevel::Debug: brls::Logger::debug("torrent: {}", msg); break;
+        case LogLevel::Info: brls::Logger::info("torrent: {}", msg); break;
+        case LogLevel::Warning: brls::Logger::warning("torrent: {}", msg); break;
+        case LogLevel::Error: brls::Logger::error("torrent: {}", msg); break;
+        }
+    });
+}
 
 EngineSession& EngineSession::instance() {
     static EngineSession s;
@@ -83,10 +98,12 @@ void EngineSession::close() {
     }
     if (!engine) return;
     // the teardown waits on any tracker announce in flight, so it runs on its own
-    // thread; the next close(), open() or the destructor joins it
-    joinPending();
+    // thread, after the previous one; the next close(), open() or the destructor joins it
     std::lock_guard<std::mutex> lk(mutex_);
-    pending_ = std::thread([engine]() mutable { engine->close(); });
+    pending_ = std::thread([engine, prev = std::move(pending_)]() mutable {
+        if (prev.joinable()) prev.join();
+        engine->close();
+    });
 }
 
 void EngineSession::joinPending() {
