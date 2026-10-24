@@ -142,5 +142,6 @@ private:
 
     brls::RepeatingTimer torrentTicker;
     bool torrentBuffering = false;
+    uint64_t playbackAttempt = 0;
 #endif
 };

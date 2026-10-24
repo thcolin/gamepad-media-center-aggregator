@@ -958,7 +958,7 @@ void StremioBackend::markUnwatched(const std::string& id) {
 // ---- playback (étape 2) --------------------------------------------------------
 
 media::PlaybackSource StremioBackend::resolvePlayback(
-    const media::Item&, const media::Media& version, const media::PlaybackOptions&) {
+    const media::Item&, const media::Media& version, [[maybe_unused]] const media::PlaybackOptions& opts) {
     // getItemDetail already fanned out /stream and stored the chosen playback URL
     // in version.parts[0].key (Stremio has no per-request transcode decision). An
     // empty url means no playable source -> the player shows a "playback failed"
@@ -968,7 +968,7 @@ media::PlaybackSource StremioBackend::resolvePlayback(
     if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty()) {
         // Blocks on the metadata, on the player's async worker. PlayerView closes the engine.
         std::string url = torrent::EngineSession::instance().open(
-            version.infoHash, version.torrentFileIdx, version.torrentSources);
+            opts.torrentGeneration, version.infoHash, version.torrentFileIdx, version.torrentSources);
         if (url.empty()) return {};
         // a read waits for pieces from the swarm: give it longer than an HTTP server
         return {url, "network-timeout=120", false, "directplay"};

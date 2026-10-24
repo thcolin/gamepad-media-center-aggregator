@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -21,8 +22,13 @@ public:
     EngineSession(const EngineSession&) = delete;
     EngineSession& operator=(const EngineSession&) = delete;
 
-    /// Returns the local URL for mpv, or "". Blocks on the metadata: call from a worker thread.
-    std::string open(const std::string& infoHash, int fileIdx, const std::vector<std::string>& sources);
+    /// Called on the UI thread when a playback starts; open() needs its value.
+    uint64_t expect();
+
+    /// Returns the local URL for mpv, or "" (also when a close() came after expect()).
+    /// Blocks on the metadata: call from a worker thread.
+    std::string open(
+        uint64_t generation, const std::string& infoHash, int fileIdx, const std::vector<std::string>& sources);
 
     /// Does not wait for the engine's threads, except a previous teardown still running.
     void close();
@@ -33,10 +39,12 @@ public:
 private:
     EngineSession();
     void joinPending();
+    void teardown();
 
     mutable std::mutex mutex_;
     std::shared_ptr<TorrentEngine> engine_;
     std::thread pending_;  // teardown of the previous engine
+    uint64_t generation_ = 0;
 };
 
 }  // namespace torrent

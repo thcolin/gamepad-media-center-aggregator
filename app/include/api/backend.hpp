@@ -68,6 +68,9 @@ struct PlaybackOptions {
     bool burnSubtitles = false;
     std::string videoCodec = "h264";  // transcode target codec
     std::string sessionId;            // stable per-playback session id (X-Plex-Session-Identifier / PlaySessionId)
+#if defined(ENABLE_TORRENT)
+    uint64_t torrentGeneration = 0;  // torrent::EngineSession::expect()
+#endif
 };
 
 /// Result of resolvePlayback(): an mpv-playable URL + how to play it.

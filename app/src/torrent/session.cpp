@@ -64,14 +64,22 @@ EngineSession::~EngineSession() {
     joinPending();
 }
 
-std::string EngineSession::open(const std::string& infoHash, int fileIdx, const std::vector<std::string>& sources) {
-    close();
+uint64_t EngineSession::expect() {
+    std::lock_guard<std::mutex> lk(mutex_);
+    return ++generation_;
+}
+
+std::string EngineSession::open(
+    uint64_t generation, const std::string& infoHash, int fileIdx, const std::vector<std::string>& sources) {
+    teardown();
     joinPending();
 
     auto engine = std::make_shared<TorrentEngine>(EngineConfig{});
     // published before the blocking open() so close() and stats() can reach it
     {
         std::lock_guard<std::mutex> lk(mutex_);
+        // the player closed or moved to another source before this task ran
+        if (generation != generation_) return "";
         engine_ = engine;
     }
 
@@ -91,6 +99,14 @@ std::string EngineSession::open(const std::string& infoHash, int fileIdx, const 
 }
 
 void EngineSession::close() {
+    {
+        std::lock_guard<std::mutex> lk(mutex_);
+        ++generation_;
+    }
+    teardown();
+}
+
+void EngineSession::teardown() {
     std::shared_ptr<TorrentEngine> engine;
     {
         std::lock_guard<std::mutex> lk(mutex_);

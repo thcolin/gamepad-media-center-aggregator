@@ -368,22 +368,36 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
 
 #if defined(ENABLE_TORRENT)
     // resolvePlayback blocks while the engine finds the metadata and peers, before mpv has a URL
-    if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty())
+    if (version.kind == media::SourceKind::Torrent && !version.infoHash.empty()) {
         this->showTorrentLoading();
-    else
+        opts.torrentGeneration = torrent::EngineSession::instance().expect();
+    } else {
         this->hideTorrentLoading();
+    }
+    uint64_t attempt = ++this->playbackAttempt;
 #endif
 
     ASYNC_RETAIN
+#if defined(ENABLE_TORRENT)
+    brls::async([ASYNC_TOKEN, item, version, opts, attempt]() {
+#else
     brls::async([ASYNC_TOKEN, item, version, opts]() {
+#endif
         try {
             // resolvePlayback runs the transcode decision synchronously and
             // throws on failure; the direct-play fallback is internal. The Plex
             // universal-transcoder request (incl. the Vita 1080p height cap) is
             // built here — see PlexBackend::resolvePlayback.
             media::PlaybackSource src = AppConfig::instance().backend().resolvePlayback(item, version, opts);
+#if defined(ENABLE_TORRENT)
+            brls::sync([ASYNC_TOKEN, src, attempt]() {
+                ASYNC_RELEASE
+                // a newer playMedia() replaced this attempt: its result is not ours to show
+                if (attempt != this->playbackAttempt) return;
+#else
             brls::sync([ASYNC_TOKEN, src]() {
                 ASYNC_RELEASE
+#endif
                 // A backend may report "nothing playable" with an empty url
                 // (e.g. Stremio with no direct/debrid stream) instead of throwing
                 // across the async/TU boundary; surface it as a player error.
