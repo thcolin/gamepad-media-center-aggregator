@@ -57,11 +57,13 @@ inline int sockRecv(int fd, void* b, size_t n) { return sceNetRecv(fd, b, (unsig
 inline int sockSend(int fd, const void* b, size_t n) { return sceNetSend(fd, b, (unsigned)n, 0); }
 inline bool sockIsEintr(int r) { return (unsigned)r == (unsigned)SCE_NET_ERROR_EINTR; }
 inline void sockClose(int fd) { sceNetSocketClose(fd); }
+inline void sockShutdown(int fd) { sceNetShutdown(fd, SCE_NET_SHUT_RDWR); }
 #else
 inline int sockRecv(int fd, void* b, size_t n) { return (int)::recv(fd, b, n, 0); }
 inline int sockSend(int fd, const void* b, size_t n) { return (int)::send(fd, b, n, 0); }
 inline bool sockIsEintr(int) { return errno == EINTR; }
 inline void sockClose(int fd) { ::close(fd); }
+inline void sockShutdown(int fd) { ::shutdown(fd, SHUT_RDWR); }
 #endif
 
 bool sendAll(int fd, const char* data, size_t len) {
@@ -158,6 +160,16 @@ void HttpServer::stop() {
         listenFd_ = -1;
     }
     if (thread_.joinable()) thread_.join();
+    // Clients may be blocked sending to mpv: shut their sockets so they return,
+    // they reference this server and the store the engine frees next.
+    std::list<Client> clients;
+    {
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        for (auto& c : clients_)
+            if (!c.done->load()) sockShutdown(c.fd);
+        clients.swap(clients_);
+    }
+    for (auto& c : clients) c.thread.join();
 }
 
 std::string HttpServer::url() const {
@@ -175,11 +187,23 @@ void HttpServer::acceptLoop() {
             if (!running_) break;
             continue;
         }
-        // mpv may hold a probe and a stream connection at once.
-        std::thread([this, fd] {
-            handleClient(fd);
-            sockClose(fd);
-        }).detach();
+        // mpv may hold a probe and a stream connection at once, and opens a new one per seek.
+        std::lock_guard<std::mutex> lk(clientsMutex_);
+        for (auto it = clients_.begin(); it != clients_.end();) {
+            if (it->done->load()) {
+                it->thread.join();
+                it = clients_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        auto done = std::make_shared<std::atomic<bool>>(false);
+        clients_.push_back({fd, done, std::thread([this, fd, done] {
+                                handleClient(fd);
+                                std::lock_guard<std::mutex> lk(clientsMutex_);
+                                sockClose(fd);
+                                done->store(true);
+                            })});
     }
 }
 

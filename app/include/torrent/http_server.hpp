@@ -6,6 +6,9 @@
 
 #include <atomic>
 #include <cstdint>
+#include <list>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -38,6 +41,14 @@ private:
     uint16_t port_ = 0;
     std::thread thread_;
     std::atomic<bool> running_{false};
+
+    struct Client {
+        int fd;
+        std::shared_ptr<std::atomic<bool>> done;
+        std::thread thread;
+    };
+    std::mutex clientsMutex_;
+    std::list<Client> clients_;
 };
 
 }  // namespace torrent
