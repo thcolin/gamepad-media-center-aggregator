@@ -970,8 +970,8 @@ media::PlaybackSource StremioBackend::resolvePlayback(
         std::string url = torrent::EngineSession::instance().open(
             version.infoHash, version.torrentFileIdx, version.torrentSources);
         if (url.empty()) return {};
-        std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
-        return {url, extra, false, "directplay"};
+        // a read waits for pieces from the swarm: give it longer than an HTTP server
+        return {url, "network-timeout=120", false, "directplay"};
     }
 #endif
     if (version.parts.empty() || version.parts.front().key.empty()) return {};
