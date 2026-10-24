@@ -132,6 +132,12 @@ int TorrentMetadata::largestFileIndex() const {
     return best;
 }
 
+// The picker, the storage and the HTTP server index by piece and byte offset:
+// a dict whose sizes disagree would send them out of bounds.
+constexpr int64_t kMinPieceLength = 16 * 1024;
+constexpr int64_t kMaxPieceLength = 32 * 1024 * 1024;
+constexpr int64_t kMaxTotalLength = int64_t(1) << 50;
+
 bool parseInfoDict(const std::string& rawInfoDict, const InfoHash& expected, TorrentMetadata& out) {
     InfoHash computed = sha1(rawInfoDict);
     static const InfoHash zero{};
@@ -168,8 +174,9 @@ bool parseInfoDict(const std::string& rawInfoDict, const InfoHash& expected, Tor
                 for (const auto& seg : pathv->list)
                     if (seg.isStr()) joined += "/" + seg.s;
             fe.path = joined;
-            out.files.push_back(std::move(fe));
+            if (fe.length < 0 || fe.length > kMaxTotalLength - offset) return false;
             offset += fe.length;
+            out.files.push_back(std::move(fe));
         }
         out.totalLength = offset;
     } else {
@@ -181,7 +188,10 @@ bool parseInfoDict(const std::string& rawInfoDict, const InfoHash& expected, Tor
         out.files.push_back(std::move(fe));
     }
 
-    if (!out.valid()) {
+    bool consistent = out.pieceLength >= kMinPieceLength && out.pieceLength <= kMaxPieceLength &&
+                      out.totalLength > 0 && out.totalLength <= kMaxTotalLength &&
+                      (int64_t)n == (out.totalLength + out.pieceLength - 1) / out.pieceLength;
+    if (!consistent || !out.valid()) {
         logWarn("metadata: parsed info dict is invalid (pieceLen=%lld total=%lld pieces=%zu)",
             (long long)out.pieceLength, (long long)out.totalLength, out.pieceHashes.size());
         return false;
