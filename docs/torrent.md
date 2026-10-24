@@ -92,12 +92,19 @@ moves the playhead, so a seek in mpv moves the picker with it.
 
 `PiecePicker::pickForPeer` works in three passes:
 
-1. Missing blocks the peer has, from the playhead piece up to
-   `playhead + readAheadPieces` (24 by default), lowest index first.
+1. Missing blocks the peer has, from the playhead piece up to the end of the
+   read-ahead window: `readAheadPieces` (24 by default), or fewer so that the window
+   fits half of `ramBudgetBytes`. Lowest index first.
 2. If that is not enough, the same read-ahead window again with duplicate requests allowed
    (endgame). A block is never asked twice from the same peer.
 3. If the peer has nothing in the read-ahead window, pieces after it, then pieces
-   before the playhead.
+   before the playhead, only while the store holds less than half its budget
+   (`PieceStore::hasRoomFor`).
+
+A block a peer sends is kept only if it answers a request made to that peer, with
+the requested length (`PiecePicker::requestedFrom`). A piece that fails its SHA-1
+with a single sender gets that peer dropped; with several, it is fetched again
+from one peer only, so the next failure names the sender.
 
 `tick()` drops in-flight blocks older than their deadline so they can be asked
 again: 3 s within 2 pieces of the playhead, 6 s within 8, 12 s beyond. Each peer
@@ -106,10 +113,13 @@ thread claims whole pieces in the same order through `pickPieceForWebSeed`.
 
 ### RAM buffer
 
-`PieceStore` holds verified pieces in memory up to `ramBudgetBytes` (128 MiB by
-default). Past the budget it evicts verified pieces more than 16 pieces behind the
-playhead, lowest index first. An evicted piece is marked missing and is fetched
-again if a reader needs it.
+`PieceStore` holds complete and partial pieces in memory up to `ramBudgetBytes`:
+128 MiB and 40 peers on desktop, 64 MiB and 24 peers on Switch and PS4, 32 MiB
+and 12 peers on Vita (`types.hpp`). Past the budget it evicts verified pieces in
+this order: more than 16 pieces behind the playhead, then ahead of the read-ahead
+window farthest first (left there by a seek back), then the 16 pieces behind the
+playhead. The window itself is never evicted. An evicted piece is marked missing
+and is fetched again if a reader needs it.
 
 ## Protocols
 
@@ -155,7 +165,12 @@ All platform code sits in `socket.cpp`, plus `util.cpp` for randomness.
   SceNet; `TORRENT_VITA_OWN_SOCKET` is for a standalone harness. DHT is off by
   default on Vita (`enableDht = false` under `__vita__`) to save RAM and CPU.
 - PS4 uses the OpenOrbis FreeBSD sockets through the POSIX path. The network stack
-  is brought up by borealis and the app.
+  is brought up by borealis and the app. OpenOrbis pairs musl's Linux constants with
+  the FreeBSD kernel, so under `__PS4__` sockets go non-blocking through `FIONBIO`
+  instead of `O_NONBLOCK`, set `SO_NOSIGPIPE` and fill `sin_len`. The HTTP server
+  polls its listen socket, because closing it does not wake `accept()` on FreeBSD.
+  `osRandom` reads `/dev/urandom` and falls back to a clock-seeded generator,
+  never `std::random_device`.
 - Desktop uses the POSIX path. Windows is not implemented: the winsock branch of
   `socket.cpp` is a TODO and `globalInit()` returns false.
 
@@ -195,13 +210,14 @@ selects the file index; by default the largest file is used.
 
 - Playback depends on the swarm. A well-seeded torrent streams, a cold one buffers
   forever.
-- `ramBudgetBytes` is not a hard cap. Eviction only drops pieces behind the playhead,
-  and the picker's third pass keeps downloading ahead of the read-ahead window when a peer has
-  nothing else to give.
+- A piece larger than half the budget still forms a one-piece window, so the store
+  can go one piece over `ramBudgetBytes`.
 - Web seeds work for single-file torrents only (`webSeedLoop`). A server that ignores
-  `Range` sends the whole file, which is held in memory before being split into
-  pieces.
-- Trackers receive `port=6881` (or `httpPort`), where nothing listens for peers.
+  `Range` is dropped after its first reply goes past the requested piece.
+- Trackers receive `port=6881`, where nothing listens for peers.
+- A peer the engine disconnects is never dialed again in the same playback
+  (`knownPeers_`).
+- The console values above are first guesses, not measurements. The PS4 socket
+  flags (`socket.cpp`, `__PS4__`) come from amansingh909's libtorrent port and have
+  not run against this engine on a console yet.
 - jech/dht keeps its state in globals, so only one `DhtManager` can run per process.
-- The `EngineConfig` defaults target desktop (40 peers, 128 MiB). Nothing lowers
-  them on consoles yet; the header comments suggest 8 to 16 peers and 32 to 64 MiB.
