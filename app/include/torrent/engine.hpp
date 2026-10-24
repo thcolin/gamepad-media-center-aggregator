@@ -92,6 +92,8 @@ private:
 
     std::atomic<bool> running_{false};
     std::atomic<bool> metadataReady_{false};
+    std::mutex lifecycleMutex_;  // open() thread start and close()
+    bool closed_ = false;
 
     TorrentMetadata meta_;
     int metaNumPieces_ = 0;

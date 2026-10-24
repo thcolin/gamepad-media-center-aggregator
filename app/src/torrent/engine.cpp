@@ -44,18 +44,24 @@ std::string TorrentEngine::open(const std::string& magnetOrInfoHash, int fileIdx
         for (auto& w : mi.webSeeds) webSeeds_.push_back(w);
     }
     meta0ReqMs_ = 0;
-    running_ = true;
-    initUtp();
-    initDht();
-    engineThread_ = std::thread([this] { engineLoop(); });
-    announcerThread_ = std::thread([this] { announcerLoop(); });
+    {
+        // close() may come from another thread at any point of open()
+        std::lock_guard<std::mutex> lk(lifecycleMutex_);
+        if (closed_) return "";
+        running_ = true;
+        initUtp();
+        initDht();
+        engineThread_ = std::thread([this] { engineLoop(); });
+        announcerThread_ = std::thread([this] { announcerLoop(); });
+    }
 
     // the local URL needs the file length, which only the metadata gives
     if (!waitForMetadata(60000)) {
         logWarn("engine: metadata not acquired within timeout");
         return "";
     }
-    return localUrl();
+    std::lock_guard<std::mutex> lk(lifecycleMutex_);
+    return closed_ ? "" : localUrl();
 }
 
 std::string TorrentEngine::openTorrentFile(const std::string& rawTorrent, int fileIdx) {
@@ -67,6 +73,8 @@ std::string TorrentEngine::openTorrentFile(const std::string& rawTorrent, int fi
     wantFileIdx_ = fileIdx;
     logInfo("engine: opened .torrent %s (%s, %lld bytes, %d pieces)", infoHashHex(infoHash_).c_str(),
         meta_.name.c_str(), (long long)meta_.totalLength, meta_.numPieces());
+    std::lock_guard<std::mutex> lk(lifecycleMutex_);
+    if (closed_) return "";
     running_ = true;
     initUtp();
     initDht();
@@ -661,11 +669,12 @@ bool TorrentEngine::waitForContiguous(int64_t bytes, int timeoutMs) {
 // ---- teardown ---------------------------------------------------------------
 
 void TorrentEngine::close() {
-    if (!running_.exchange(false)) {
-        // not started or already closed: threads may still need joining
-    }
-    if (store_) store_->stop();  // unblocks the HTTP server's readFile
+    std::lock_guard<std::mutex> lifecycle(lifecycleMutex_);
+    closed_ = true;
+    running_ = false;
+    // the engine thread creates store_ in the magnet flow: join it before reading store_
     if (engineThread_.joinable()) engineThread_.join();
+    if (store_) store_->stop();  // unblocks the HTTP server's readFile
     if (announcerThread_.joinable()) announcerThread_.join();
     if (webSeedThread_.joinable()) webSeedThread_.join();
     if (http_) {
