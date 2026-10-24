@@ -100,7 +100,7 @@ void TorrentEngine::setPlayhead(int64_t fileByteOffset) {
     if (store_) store_->setPlayhead(fileIdx_, fileByteOffset);
 }
 
-std::string TorrentEngine::localUrl() const { return http_ ? http_->url() : std::string(); }
+std::string TorrentEngine::localUrl() const { return http_ && http_->port() ? http_->url() : std::string(); }
 
 // ---- data stage bring-up ----------------------------------------------------
 

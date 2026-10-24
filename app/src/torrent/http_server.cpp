@@ -100,6 +100,7 @@ bool HttpServer::start(uint16_t port) {
     listenFd_ = sceNetSocket("gmca-http", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, 0);
     if (listenFd_ < 0) {
         listenFd_ = -1;
+        port_ = 0;
         return false;
     }
     int one = 1;
@@ -113,6 +114,7 @@ bool HttpServer::start(uint16_t port) {
     if (sceNetBind(listenFd_, reinterpret_cast<SceNetSockaddr*>(&addr), sizeof(addr)) < 0) {
         sceNetSocketClose(listenFd_);
         listenFd_ = -1;
+        port_ = 0;
         return false;
     }
     unsigned alen = sizeof(addr);
@@ -121,6 +123,7 @@ bool HttpServer::start(uint16_t port) {
     if (sceNetListen(listenFd_, 4) < 0) {
         sceNetSocketClose(listenFd_);
         listenFd_ = -1;
+        port_ = 0;
         return false;
     }
 #else
@@ -140,6 +143,7 @@ bool HttpServer::start(uint16_t port) {
     if (::bind(listenFd_, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
         ::close(listenFd_);
         listenFd_ = -1;
+        port_ = 0;
         return false;
     }
     socklen_t alen = sizeof(addr);
@@ -147,6 +151,7 @@ bool HttpServer::start(uint16_t port) {
     if (::listen(listenFd_, 4) < 0) {
         ::close(listenFd_);
         listenFd_ = -1;
+        port_ = 0;
         return false;
     }
 #endif
