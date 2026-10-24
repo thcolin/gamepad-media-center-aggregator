@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -117,6 +118,9 @@ private:
     std::mutex peersMutex_;
     std::vector<PeerAddr> pendingPeers_;
     std::unordered_set<std::string> knownPeers_;
+    // engine thread only
+    std::unordered_map<int, std::unordered_set<PeerConnection*>> contributors_;
+    std::unordered_map<PeerConnection*, int> hashStrikes_;
     // engine thread only; attemptTried_ keeps each carrier/encryption rung to one dial per endpoint
     std::vector<PeerAttempt> retryQueue_;
     std::unordered_set<std::string> attemptTried_;

@@ -227,8 +227,12 @@ void TorrentEngine::connectPending() {
                 TransportKind wasKind = (*it)->pollable() ? TransportKind::Tcp : TransportKind::Utp;
                 queueFallback((*it)->addr(), wasKind, (*it)->encryptionMode());
             }
-            std::lock_guard<std::mutex> lk(pickerMutex_);
-            if (picker_) picker_->releasePeer(it->get());
+            {
+                std::lock_guard<std::mutex> lk(pickerMutex_);
+                if (picker_) picker_->releasePeer(it->get());
+            }
+            for (auto& c : contributors_) c.second.erase(it->get());
+            hashStrikes_.erase(it->get());
             it = peers_.erase(it);
         } else {
             ++it;
@@ -343,9 +347,25 @@ void TorrentEngine::onPeerHandshake(PeerConnection* peer) {
     if (metadataReady_) peer->onMetadataReady(metaNumPieces_);
 }
 
-void TorrentEngine::onPeerBlock(PeerConnection*, int piece, int32_t begin, const uint8_t* data, int len) {
+void TorrentEngine::onPeerBlock(PeerConnection* peer, int piece, int32_t begin, const uint8_t* data, int len) {
     if (!store_) return;
-    store_->addBlock(piece, begin, data, len);
+    auto r = store_->addBlock(piece, begin, data, len);
+    if (r == PieceStore::AddResult::Accepted || r == PieceStore::AddResult::Complete ||
+        r == PieceStore::AddResult::BadHash)
+        contributors_[piece].insert(peer);
+    if (r == PieceStore::AddResult::BadHash) {
+        // A peer alone behind a bad piece is lying; with several, the second strike decides.
+        // A closed peer is never dialed again (knownPeers_).
+        auto& who = contributors_[piece];
+        for (PeerConnection* p : who)
+            if (who.size() == 1 || ++hashStrikes_[p] >= 2) {
+                logWarn("engine: peer %s sent a bad piece %d, dropped", p->addr().str().c_str(), piece);
+                p->close();
+            }
+        contributors_.erase(piece);
+    } else if (r == PieceStore::AddResult::Complete) {
+        contributors_.erase(piece);
+    }
     std::lock_guard<std::mutex> lk(pickerMutex_);
     if (picker_) picker_->gotBlock(piece, begin);
 }
