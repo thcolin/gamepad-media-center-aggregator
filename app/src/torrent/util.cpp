@@ -46,7 +46,9 @@ void osRandom(void* buf, size_t n) {
         ::close(fd);
         if (got == n) return;
     }
-    static thread_local std::mt19937 rng((unsigned)std::random_device{}());
+    // No /dev/urandom in the sandbox: std::random_device would read it too, so
+    // seed from the clock. These bytes feed peer ids, DHT ids and MSE, none secret.
+    static thread_local std::mt19937_64 rng((uint64_t)nowMs() ^ (uint64_t)(uintptr_t)&n);
     for (size_t i = 0; i < n; i++) p[i] = (unsigned char)(rng() & 0xFF);
 #endif
 }

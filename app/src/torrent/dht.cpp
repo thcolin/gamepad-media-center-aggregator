@@ -23,8 +23,6 @@
 // Last: dht.h expects FILE, struct sockaddr, size_t and time_t already declared.
 #include "dht.h"
 
-#include "torrent/util.hpp"
-
 #if defined(TORRENT_SHA1_OPENSSL)
 #include <openssl/rand.h>
 #elif defined(TORRENT_SHA1_MBEDTLS)
