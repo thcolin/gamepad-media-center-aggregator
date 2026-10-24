@@ -67,12 +67,6 @@ std::string TorrentEngine::openTorrentFile(const std::string& rawTorrent, int fi
     wantFileIdx_ = fileIdx;
     logInfo("engine: opened .torrent %s (%s, %lld bytes, %d pieces)", infoHashHex(infoHash_).c_str(),
         meta_.name.c_str(), (long long)meta_.totalLength, meta_.numPieces());
-    {
-        std::lock_guard<std::mutex> lk(trackerMutex_);
-        for (auto& tier : meta_.trackerTiers)
-            for (auto& t : tier) trackers_.push_back(t);
-        for (auto& w : meta_.webSeeds) webSeeds_.push_back(w);
-    }
     running_ = true;
     initUtp();
     initDht();
@@ -494,9 +488,12 @@ void TorrentEngine::announcerLoop() {
         AnnounceContext ctx;
         ctx.infoHash = infoHash_;
         ctx.peerId = peerId_;
-        ctx.port = cfg_.httpPort ? cfg_.httpPort : 6881;
-        ctx.downloaded = store_ ? store_->bytesHave() : 0;
-        ctx.left = meta_.valid() ? std::max<int64_t>(0, meta_.totalLength - ctx.downloaded) : 16384;
+        // Nothing listens: the engine only dials out. Trackers still want a port.
+        ctx.port = 6881;
+        // store_ and meta_ are written by the engine thread until metadataReady_ is set.
+        bool ready = metadataReady_.load();
+        ctx.downloaded = ready ? store_->bytesHave() : 0;
+        ctx.left = ready ? std::max<int64_t>(0, meta_.totalLength - ctx.downloaded) : 16384;
         ctx.event = firstRound ? 2 : 0;
         ctx.numWant = cfg_.maxPeers * 2;
 
