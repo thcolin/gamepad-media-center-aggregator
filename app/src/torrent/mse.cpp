@@ -140,7 +140,7 @@ MseHandshake::Status MseHandshake::feed(const uint8_t* data, size_t len, std::st
             uint32_t sel = getBE32(hdr + kVcLen);
             uint16_t padD = getBE16(hdr + kVcLen + 4);
             rc4_ = (sel & kCryptoRc4) != 0;
-            if (sel != kCryptoPlaintext && sel != kCryptoRc4) {
+            if ((sel != kCryptoPlaintext && sel != kCryptoRc4) || (requireRc4_ && !rc4_)) {
                 phase_ = Phase::Failed;
                 return Status::Failed;
             }

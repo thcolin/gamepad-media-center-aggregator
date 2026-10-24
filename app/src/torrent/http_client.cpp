@@ -46,6 +46,14 @@ Response perform(const std::string& url, const char* range, size_t maxBytes, int
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    // tracker and web seed URLs come from the addon: http and https only, redirects included
+#if LIBCURL_VERSION_NUM >= 0x075500
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+#else
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+#endif
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)timeoutMs);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 8000L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
