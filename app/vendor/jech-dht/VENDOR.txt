@@ -1,0 +1,5 @@
+jech/dht from https://github.com/jech/dht
+Upstream commit: 560f7c169c0e5d78e36a44cd1a5d7bd7608013e7 (dht-0.28, 2026-09-04)
+License: MIT (see LICENCE)
+
+dht.c, dht.h, LICENCE and README only, unmodified. Built by torrent/CMakeLists.txt.

@@ -1,0 +1,5 @@
+libutp from https://github.com/bittorrent/libutp
+Upstream commit: 2b364cbb0650bdab64a5de2abb4518f9f228ec44 (2018-05-15)
+License: MIT (see LICENSE)
+
+Sources, headers, LICENSE and README only, unmodified. Built by torrent/CMakeLists.txt.
