@@ -526,7 +526,7 @@ void TorrentEngine::webSeedLoop() {
         seeds = webSeeds_;
     }
     // single-file only: a multi-file web seed needs a URL per file
-    while (running_ && store_) {
+    while (running_ && store_ && !seeds.empty()) {
         int piece = -1;
         {
             std::lock_guard<std::mutex> lk(pickerMutex_);
@@ -541,11 +541,16 @@ void TorrentEngine::webSeedLoop() {
         int64_t last = begin + plen - 1;
 
         bool got = false;
-        for (const auto& base : seeds) {
-            if (!running_) break;
-            std::string url = base;
+        for (auto it = seeds.begin(); it != seeds.end() && running_;) {
+            std::string url = *it;
             if (!url.empty() && url.back() == '/') url += fileName_;  // BEP-19 dir form
             http::Response resp = http::getRange(url, begin, last, 30000);
+            if (resp.tooLarge) {
+                logWarn("webseed %s ignores Range, dropped", url.c_str());
+                it = seeds.erase(it);
+                continue;
+            }
+            ++it;
             if (!resp.ok()) {
                 if (resp.status != 0)
                     logWarn("webseed %s piece %d: HTTP %ld", url.c_str(), piece, resp.status);
@@ -559,24 +564,9 @@ void TorrentEngine::webSeedLoop() {
                     PieceStore::AddResult::Complete)
                     got = true;
                 if (got) break;
-            } else if ((int64_t)body.size() == meta_.totalLength) {
-                // BEP-19 lets a server ignore Range and send the whole file: commit
-                // every missing piece from it
-                int committed = 0;
-                for (int p = 0; p < meta_.numPieces(); p++) {
-                    if (store_->have(p)) continue;
-                    int64_t poff = (int64_t)p * meta_.pieceLength;
-                    int64_t pl = store_->pieceLength(p);
-                    if (store_->commitPiece(p, reinterpret_cast<const uint8_t*>(body.data()) + poff, pl) ==
-                        PieceStore::AddResult::Complete)
-                        committed++;
-                }
-                logInfo("webseed %s ignored Range; committed %d pieces from the full file", url.c_str(), committed);
-                got = committed > 0;
-                if (got) break;
             } else {
-                logWarn("webseed %s piece %d: unexpected body %zu bytes (want %lld or whole file %lld)", url.c_str(),
-                    piece, body.size(), (long long)plen, (long long)meta_.totalLength);
+                logWarn("webseed %s piece %d: unexpected body %zu bytes (want %lld)", url.c_str(), piece, body.size(),
+                    (long long)plen);
             }
         }
         // release the claim either way, on success the store has the piece

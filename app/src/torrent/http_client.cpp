@@ -13,13 +13,26 @@ void ensureCurl() {
     std::call_once(g_curlOnce, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
 }
 
+struct Sink {
+    Response* resp;
+    size_t maxBytes;
+};
+
 size_t writeCb(char* ptr, size_t size, size_t nmemb, void* userdata) {
-    auto* out = static_cast<std::string*>(userdata);
-    out->append(ptr, size * nmemb);
-    return size * nmemb;
+    auto* sink = static_cast<Sink*>(userdata);
+    size_t n = size * nmemb;
+    if (sink->resp->body.size() + n > sink->maxBytes) {
+        sink->resp->tooLarge = true;
+        return 0;  // aborts with CURLE_WRITE_ERROR
+    }
+    sink->resp->body.append(ptr, n);
+    return n;
 }
 
-Response perform(const std::string& url, const char* range, int timeoutMs) {
+// Tracker replies are a few KiB; a web seed answers one piece.
+constexpr size_t kMaxTrackerReply = 1024 * 1024;
+
+Response perform(const std::string& url, const char* range, size_t maxBytes, int timeoutMs) {
     ensureCurl();
     Response resp;
     CURL* curl = curl_easy_init();
@@ -29,13 +42,13 @@ Response perform(const std::string& url, const char* range, int timeoutMs) {
     }
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp.body);
+    Sink sink{&resp, maxBytes};
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sink);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)timeoutMs);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 8000L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "GMCA-torrent/0.1");
     if (range) curl_easy_setopt(curl, CURLOPT_RANGE, range);
 
@@ -50,11 +63,11 @@ Response perform(const std::string& url, const char* range, int timeoutMs) {
 }
 }  // namespace
 
-Response get(const std::string& url, int timeoutMs) { return perform(url, nullptr, timeoutMs); }
+Response get(const std::string& url, int timeoutMs) { return perform(url, nullptr, kMaxTrackerReply, timeoutMs); }
 
 Response getRange(const std::string& url, int64_t first, int64_t last, int timeoutMs) {
     std::string range = std::to_string(first) + "-" + std::to_string(last);
-    return perform(url, range.c_str(), timeoutMs);
+    return perform(url, range.c_str(), (size_t)(last - first + 1), timeoutMs);
 }
 
 std::string urlEncode(const std::string& raw) {
