@@ -9,6 +9,7 @@ set(BOREALIS_LIBRARY ${BOREALIS_DIR}/library)
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
 
 option(USE_SYSTEM_CURL "use system installed libcurl" ON)
+option(ENABLE_TORRENT "Stream Stremio torrent sources on device" OFF)
 
 # Linux
 # Using CMAKE_INSTALL_PREFIX specifies the location where the application is installed.
@@ -90,6 +91,8 @@ endif ()
 
 # setting src and include
 file(GLOB_RECURSE MAIN_SRC "${PROJECT_SOURCE_DIR}/app/src/*.cpp")
+# The torrent engine is its own target, see torrent/CMakeLists.txt
+list(FILTER MAIN_SRC EXCLUDE REGEX "/app/src/torrent/")
 if (PLATFORM_SWITCH)
     # System service initialization functions required for libnx
     list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
@@ -397,4 +400,8 @@ elseif (PLATFORM_PS4)
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/ps4/sce_sys/about ${CMAKE_BINARY_DIR}/ps4/sce_sys/about
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/ps4/resources
     )
+endif ()
+
+if (ENABLE_TORRENT)
+    add_subdirectory(torrent)
 endif ()
