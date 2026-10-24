@@ -381,7 +381,7 @@ void PeerConnection::sendPex(const std::vector<PeerAddr>& current) {
 void PeerConnection::applyHave(int index) {
     if (!peerHas_.empty()) {
         if (index >= 0 && index < (int)peerHas_.size()) peerHas_[index] = 1;
-    } else {
+    } else if (pendingHaves_.size() < 65536) {  // a peer could flood HAVEs before the metadata lands
         pendingHaves_.push_back(index);
     }
 }
@@ -407,7 +407,9 @@ void PeerConnection::handleMessage(const uint8_t* data, int len) {
     int plen = len - 1;
     switch (id) {
     case kMsgChoke:
+        // the peer drops our pending requests (BEP-3); the picker re-requests them on timeout
         peerChoking_ = true;
+        outstanding_ = 0;
         break;
     case kMsgUnchoke:
         peerChoking_ = false;
