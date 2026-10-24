@@ -479,6 +479,9 @@ struct StreamOption {
     std::string externalUrl;  // open in browser / external app
     std::string infoHash;     // torrent
     int fileIdx = -1;         // torrent file index
+#if defined(ENABLE_TORRENT)
+    std::vector<std::string> sources;  // torrent peer discovery hints: "tracker:<url>", "dht:<id>"
+#endif
     bool notWebReady = false;
     std::string bingeGroup;
 };
@@ -496,6 +499,9 @@ inline std::vector<StreamOption> parseStreams(const nlohmann::json& j) {
         so.externalUrl = jstr(s, "externalUrl");
         so.infoHash = jstr(s, "infoHash");
         so.fileIdx = (int)jint(s, "fileIdx", -1);
+#if defined(ENABLE_TORRENT)
+        so.sources = stringArray(s, "sources");
+#endif
         auto bh = s.find("behaviorHints");
         if (bh != s.end() && bh->is_object()) {
             so.notWebReady = jbool(*bh, "notWebReady");
@@ -646,6 +652,50 @@ inline std::string parseAudioLabel(const std::string& text) {
     return "";
 }
 
+/// Seeder count from a stream's name+title: Torrentio & co. write "👤 45" or
+/// "👥 45", others "Seeders: 45" or "45 seeders". -1 when absent.
+inline int parseSeeders(const std::string& text) {
+    // 👤 U+1F464 and 👥 U+1F465, 4 UTF-8 bytes each
+    static const char* emojis[] = {"\xF0\x9F\x91\xA4", "\xF0\x9F\x91\xA5"};
+    for (auto e : emojis) {
+        size_t p = text.find(e);
+        if (p == std::string::npos) continue;
+        size_t i = p + 4;  // skip the 4-byte emoji
+        while (i < text.size() && (text[i] == ' ' || text[i] == ':')) ++i;
+        if (i < text.size() && std::isdigit((unsigned char)text[i])) {
+            int n = 0;
+            while (i < text.size() && std::isdigit((unsigned char)text[i]) && n < 100000000) n = n * 10 + (text[i++] - '0');
+            return n;
+        }
+    }
+    // "seed", "seeds", "seeders", case-insensitive, number after or before the word
+    std::string low = text;
+    for (auto& c : low) c = (char)std::tolower((unsigned char)c);
+    size_t p = low.find("seed");
+    if (p != std::string::npos) {
+        size_t i = p + 4;
+        while (i < low.size() && std::isalpha((unsigned char)low[i])) ++i;  // rest of the word
+        size_t j = i;
+        while (j < low.size() && (low[j] == ' ' || low[j] == ':')) ++j;
+        if (j < low.size() && std::isdigit((unsigned char)low[j])) {
+            int n = 0;
+            while (j < low.size() && std::isdigit((unsigned char)low[j]) && n < 100000000) n = n * 10 + (low[j++] - '0');
+            return n;
+        }
+        long k = (long)p - 1;
+        while (k >= 0 && low[k] == ' ') --k;
+        long end = k;
+        while (k >= 0 && std::isdigit((unsigned char)low[k])) --k;
+        if (k < end) {
+            try {
+                return std::stoi(low.substr(k + 1, end - k));
+            } catch (...) {
+            }
+        }
+    }
+    return -1;
+}
+
 /// Detect a debrid-served stream from its `name` (e.g. "[RD+]"/"[RD download]"/
 /// "[AD+]"/"[RD⚡]"). Sets `cached` (best-effort: '+'/⚡ = cached, "download"/⬇/⏳ =
 /// not). Debrid-ness is conveyed only by this label convention — there is no
@@ -673,8 +723,8 @@ inline bool detectDebrid(const std::string& name, bool& cached) {
 
 /// Map one Stremio stream to a neutral source row. `addonName` (manifest name)
 /// is the reliable provenance label (the addon brand inside `name` is not always
-/// present). Only `url` streams are playable here; infoHash/ytId/externalUrl are
-/// classified as non-playable (no torrent engine / no browser on console).
+/// present). `url` streams are playable, and so is a raw infoHash when the
+/// torrent engine is built in (ENABLE_TORRENT); ytId/externalUrl never are.
 inline media::Media streamToMedia(const StreamOption& s, const std::string& addonName) {
     media::Media m;
     std::string blob = s.name + " " + s.title;
@@ -702,6 +752,20 @@ inline media::Media streamToMedia(const StreamOption& s, const std::string& addo
         m.detail = detail;
     } else if (!s.infoHash.empty()) {
         m.kind = media::SourceKind::Torrent;
+#if defined(ENABLE_TORRENT)
+        m.infoHash = s.infoHash;
+        m.torrentFileIdx = s.fileIdx;
+        m.torrentSources = s.sources;
+        // same fields as a url stream: the PSV codec filter reads them too
+        m.videoCodec = parseCodecLabel(blob);
+        m.audioCodec = parseAudioLabel(blob);
+        std::string size = parseSizeLabel(s.title.empty() ? s.name : s.title);
+        std::string detail;
+        if (!m.videoCodec.empty()) detail = m.videoCodec;
+        if (!size.empty()) detail += (detail.empty() ? "" : "  ·  ") + size;
+        m.detail = detail;
+        m.seeders = parseSeeders(blob);
+#endif
     } else if (!s.ytId.empty()) {
         m.kind = media::SourceKind::Youtube;
     } else {

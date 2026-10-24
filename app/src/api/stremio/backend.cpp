@@ -257,6 +257,11 @@ std::vector<media::Media> resolveAllStreams(
         int qx = qualityRank(x.videoResolution), qy = qualityRank(y.videoResolution);
 #endif
         if (qx != qy) return qx > qy;                           // then best quality
+#if defined(ENABLE_TORRENT)
+        // a torrent still has to find peers: a resolved url of the same quality goes first
+        bool xt = x.kind == media::SourceKind::Torrent, yt = y.kind == media::SourceKind::Torrent;
+        if (x.playable() && xt != yt) return yt;
+#endif
         if (x.playable() && x.cached != y.cached) return x.cached;  // then cached debrid first
         return false;
     });

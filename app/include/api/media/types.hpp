@@ -203,8 +203,20 @@ struct Media {
     std::string detail;  // secondary line: codec · size · seeders (our own re-render)
     SourceKind kind = SourceKind::Direct;
     bool cached = true;  // debrid cache hint (best-effort; ⚡ vs pending). false = uncached
+    int seeders = -1;  // addon-provided, torrent sources only; -1 = unknown
+#if defined(ENABLE_TORRENT)
+    // Torrent source: no part, resolvePlayback asks the engine for a local URL.
+    std::string infoHash;
+    int torrentFileIdx = -1;
+    std::vector<std::string> torrentSources;  // Stremio "tracker:<url>" / "dht:<id>" hints
+    bool playable() const {
+        if (!parts.empty() && !parts.front().key.empty()) return true;
+        return kind == SourceKind::Torrent && !infoHash.empty();
+    }
+#else
     // A source is directly playable iff it carries a real URL (parts[0].key).
     bool playable() const { return !parts.empty() && !parts.front().key.empty(); }
+#endif
 };
 inline void from_json(const nlohmann::json& j, Media& r) {
     r.id = jint(j, "id");
