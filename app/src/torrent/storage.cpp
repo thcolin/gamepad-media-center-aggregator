@@ -61,6 +61,7 @@ PieceStore::AddResult PieceStore::addBlock(int idx, int64_t begin, const uint8_t
     if (slot.data.empty()) {
         slot.data.assign((size_t)plen, 0);
         slot.received.assign(blocksInPiece(idx), 0);
+        residentBytes_ += plen;
     }
     if (slot.received[blockIdx]) return AddResult::Duplicate;
     std::memcpy(slot.data.data() + begin, data, (size_t)len);
@@ -78,6 +79,7 @@ PieceStore::AddResult PieceStore::commitPiece(int idx, const uint8_t* data, int6
     int64_t plen = pieceLength(idx);
     if (len != plen) return AddResult::Invalid;
     Slot& slot = slots_[idx];
+    if (slot.data.empty()) residentBytes_ += plen;
     slot.data.assign(data, data + len);
     slot.received.assign(blocksInPiece(idx), 1);
     slot.receivedCount = (int)slot.received.size();
@@ -89,37 +91,46 @@ PieceStore::AddResult PieceStore::verifyAndCommitLocked(int idx) {
     Sha1Digest got = sha1(slot.data.data(), slot.data.size());
     if (got != meta_.pieceHashes[idx]) {
         logWarn("storage: piece %d SHA-1 mismatch (got %s), discarding", idx, toHex(got).c_str());
-        int64_t was = (int64_t)slot.data.size();
-        (void)was;
+        residentBytes_ -= (int64_t)slot.data.size();
         slots_.erase(idx);
         return AddResult::BadHash;
     }
     haveMap_[idx] = 1;
     slot.complete = true;
     piecesHave_++;
-    int64_t plen = (int64_t)slot.data.size();
-    bytesHave_ += plen;
-    bufferedBytes_ += plen;
+    bytesHave_ += (int64_t)slot.data.size();
     cv_.notify_all();
     maybeEvictLocked();
     return AddResult::Complete;
 }
 
 void PieceStore::maybeEvictLocked() {
-    if (bufferedBytes_ <= ramBudget_) return;
+    if (residentBytes_ <= ramBudget_) return;
     int playhead = (int)(playheadGlobal_ / meta_.pieceLength);
     const int keepBehind = 16;  // rewind margin
-    int guard = playhead - keepBehind;
-    for (auto it = slots_.begin(); it != slots_.end() && bufferedBytes_ > ramBudget_;) {
-        if (it->second.complete && it->first < guard) {
-            bufferedBytes_ -= (int64_t)it->second.data.size();
-            haveMap_[it->first] = 0;  // the picker fetches it again if needed
-            piecesHave_--;
-            it = slots_.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    auto evict = [&](int idx) {
+        auto it = slots_.find(idx);
+        if (it == slots_.end() || !it->second.complete) return;
+        residentBytes_ -= (int64_t)it->second.data.size();
+        haveMap_[idx] = 0;  // the picker fetches it again if needed
+        piecesHave_--;
+        slots_.erase(it);
+    };
+    // The read-ahead window, at most half the budget (PiecePicker), is never evicted.
+    int windowEnd = playhead + (int)std::max<int64_t>(1, ramBudget_ / 2 / meta_.pieceLength);
+    // Behind the rewind margin first, then ahead of the window farthest first
+    // (left by a seek back), then the rewind margin itself, oldest first.
+    for (int idx = 0; idx < playhead - keepBehind && residentBytes_ > ramBudget_; idx++) evict(idx);
+    for (int idx = meta_.numPieces() - 1; idx > windowEnd && residentBytes_ > ramBudget_; idx--) evict(idx);
+    for (int idx = 0; idx < playhead && residentBytes_ > ramBudget_; idx++) evict(idx);
+}
+
+bool PieceStore::hasRoomFor(int idx) const {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (slots_.count(idx)) return true;
+    // Half the budget stays for the read-ahead window, so background pieces
+    // never push the store into evicting what they just fetched.
+    return residentBytes_ + pieceLength(idx) <= ramBudget_ / 2;
 }
 
 void PieceStore::setPlayhead(int fileIdx, int64_t fileOffset) {

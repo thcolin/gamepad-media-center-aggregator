@@ -45,6 +45,7 @@ private:
 
     static int64_t key(int piece, int32_t begin) { return ((int64_t)piece << 24) | (begin / PieceStore::kBlockSize); }
     bool blockNeeded(int piece, int blockIdx) const;
+    int windowEndFor(int playhead) const;
     int deadlineMsForPiece(int piece, int playhead) const;
 
     PieceStore& store_;

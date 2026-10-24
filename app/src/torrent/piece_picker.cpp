@@ -15,6 +15,12 @@ bool PiecePicker::blockNeeded(int piece, int blockIdx) const {
     return it == inflight_.end();
 }
 
+int PiecePicker::windowEndFor(int playhead) const {
+    // The window is always fetched, so it must fit half the RAM budget.
+    int budgetPieces = (int)std::max<int64_t>(1, store_.ramBudget() / 2 / store_.pieceLength(0));
+    return std::min(store_.numPieces() - 1, playhead + std::min(cfg_.readAheadPieces, budgetPieces));
+}
+
 int PiecePicker::deadlineMsForPiece(int piece, int playhead) const {
     // the closer to the playhead, the sooner the decoder needs it
     int dist = piece - playhead;
@@ -29,13 +35,14 @@ std::vector<PiecePicker::BlockRequest> PiecePicker::pickForPeer(
     if (count <= 0) return out;
     int total = store_.numPieces();
     int playhead = store_.playheadPiece();
-    int windowEnd = std::min(total - 1, playhead + cfg_.readAheadPieces);
+    int windowEnd = windowEndFor(playhead);
 
-    auto tryPiece = [&](int p, bool endgame) {
+    auto tryPiece = [&](int p, bool endgame, bool needRoom = false) {
         if ((int)out.size() >= count) return;
         if (p < 0 || p >= total) return;
         if (p < (int)peerHas.size() && !peerHas[p]) return;
         if (store_.have(p)) return;
+        if (needRoom && !store_.hasRoomFor(p)) return;
         int blocks = store_.blocksInPiece(p);
         for (int b = 0; b < blocks && (int)out.size() < count; b++) {
             if (store_.blockReceived(p, b)) continue;
@@ -62,8 +69,8 @@ std::vector<PiecePicker::BlockRequest> PiecePicker::pickForPeer(
 
     // nothing left in the window: the rest of the file, ahead first, then behind
     if (out.empty()) {
-        for (int p = windowEnd + 1; p < total && (int)out.size() < count; p++) tryPiece(p, false);
-        for (int p = 0; p < playhead && (int)out.size() < count; p++) tryPiece(p, false);
+        for (int p = windowEnd + 1; p < total && (int)out.size() < count; p++) tryPiece(p, false, true);
+        for (int p = 0; p < playhead && (int)out.size() < count; p++) tryPiece(p, false, true);
     }
     return out;
 }
@@ -99,9 +106,10 @@ void PiecePicker::tick() {
 int PiecePicker::pickPieceForWebSeed(const void* webSeedTag) {
     int total = store_.numPieces();
     int playhead = store_.playheadPiece();
-    int windowEnd = std::min(total - 1, playhead + cfg_.readAheadPieces);
+    int windowEnd = windowEndFor(playhead);
     auto claim = [&](int p) -> bool {
         if (store_.have(p)) return false;
+        if ((p < playhead || p > windowEnd) && !store_.hasRoomFor(p)) return false;
         int blocks = store_.blocksInPiece(p);
         // the web seed fetches whole pieces: skip one a peer is already delivering
         for (int b = 0; b < blocks; b++)

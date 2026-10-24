@@ -10,7 +10,7 @@
 
 namespace torrent {
 
-/// Thread-safe, RAM-only, SHA-1 checked. Over budget, pieces behind the playhead are evicted.
+/// Thread-safe, RAM-only, SHA-1 checked. Over budget, pieces away from the playhead are evicted.
 class PieceStore {
 public:
     static constexpr int kBlockSize = 16384;  // the block size peers serve
@@ -32,6 +32,9 @@ public:
     bool blockReceived(int idx, int blockIndex) const;
     int64_t bytesHave() const;
     int piecesHave() const;
+    /// Whether a piece outside the read-ahead window may be started.
+    bool hasRoomFor(int idx) const;
+    int64_t ramBudget() const { return ramBudget_; }
 
     /// Blocks until the covering pieces are in; returns bytes copied, or -1 after stop().
     int64_t readFile(int fileIdx, int64_t fileOffset, uint8_t* out, int64_t len);
@@ -66,7 +69,7 @@ private:
     std::vector<uint8_t> haveMap_;
     int piecesHave_ = 0;
     int64_t bytesHave_ = 0;
-    int64_t bufferedBytes_ = 0;  // resident, unlike bytesHave_
+    int64_t residentBytes_ = 0;  // complete and partial pieces in RAM, unlike bytesHave_
     int64_t playheadGlobal_ = 0;
     bool stopped_ = false;
 };
