@@ -24,12 +24,20 @@ enum class Encryption { Plaintext, Prefer, Forced };
 
 struct EngineConfig {
     uint16_t httpPort = 0;                       // 0 = pick an ephemeral port for the local HTTP server
-    int maxPeers = 40;
     int blockPipelineDepth = 16;                 // outstanding block requests per peer
     int readAheadPieces = 24;
+    // The piece store lives in RAM next to mpv's own demuxer cache.
+#if defined(__vita__)
+    int maxPeers = 12;
+    int64_t ramBudgetBytes = 32 * 1024 * 1024;
+#elif defined(__SWITCH__) || defined(__PS4__)
+    int maxPeers = 24;
+    int64_t ramBudgetBytes = 64 * 1024 * 1024;
+#else
+    int maxPeers = 40;
     int64_t ramBudgetBytes = 128 * 1024 * 1024;
+#endif
     bool enableWebSeed = true;                   // BEP-19
-    bool enableTrackers = true;
     bool enablePex = true;                       // BEP-11
     // BEP-5, off on Vita: its routing table and query traffic cost RAM and CPU the Vita lacks
 #if defined(__vita__)
@@ -43,7 +51,6 @@ struct EngineConfig {
     bool enableUtp = true;
     // many peers and ISPs require or prefer encryption
     Encryption encryption = Encryption::Prefer;
-    int peerConnectTimeoutMs = 8000;
     std::string peerIdPrefix = "-GM0001-";  // Azureus-style, 8 chars
 };
 
