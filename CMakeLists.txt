@@ -156,6 +156,10 @@ endif ()
 
 # build borealis and other third party libraries
 add_subdirectory(library)
+# yoga builds with -fno-rtti, so it emits its own hidden std::exception typeinfo, which
+# the link then uses for every catch in the app: libc++ exceptions such as
+# std::runtime_error no longer matched catch (const std::exception&)
+target_compile_options(yogacore PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-frtti>)
 
 if (USE_SYSTEM_CURL)
     find_package(CURL REQUIRED)
