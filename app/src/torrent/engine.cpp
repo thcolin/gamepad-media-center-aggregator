@@ -13,6 +13,8 @@ namespace torrent {
 
 namespace {
 constexpr int kMetadataPieceSize = 16384;  // BEP-9 metadata pieces are 16 KiB
+// total_size comes from a peer; real info dicts stay well under this.
+constexpr int64_t kMaxMetadataSize = 4 * 1024 * 1024;
 void sleepMs(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 }  // namespace
 
@@ -290,7 +292,7 @@ void TorrentEngine::scheduleMetadataRequests() {
 
 void TorrentEngine::onMetadataPiece(int piece, int64_t totalSize, const uint8_t* data, int len) {
     if (metadataReady_) return;
-    if (metadataSize_ == 0 && totalSize > 0) {
+    if (metadataSize_ == 0 && totalSize > 0 && totalSize <= kMaxMetadataSize) {
         metadataSize_ = totalSize;
         int count = (int)((totalSize + kMetadataPieceSize - 1) / kMetadataPieceSize);
         metaBuf_.assign((size_t)totalSize, 0);
@@ -303,7 +305,7 @@ void TorrentEngine::onMetadataPiece(int piece, int64_t totalSize, const uint8_t*
     if (piece < 0 || piece >= count || metaReceived_[piece]) return;
     int64_t off = (int64_t)piece * kMetadataPieceSize;
     int64_t space = (int64_t)metaBuf_.size() - off;
-    int copy = (int)std::min<int64_t>(len, space);
+    int copy = (int)std::min<int64_t>(std::min(len, kMetadataPieceSize), space);
     if (copy <= 0) return;
     std::memcpy(metaBuf_.data() + off, data, (size_t)copy);
     metaReceived_[piece] = 1;
@@ -315,9 +317,12 @@ void TorrentEngine::onMetadataComplete() {
     std::string raw(reinterpret_cast<char*>(metaBuf_.data()), metaBuf_.size());
     if (!parseInfoDict(raw, infoHash_, meta_)) {
         logError("engine: metadata failed verification/parse — resetting to re-fetch");
+        // The size came from one peer too: forget it, or a lying peer stalls the torrent for good.
+        metadataSize_ = 0;
         metaPiecesGot_ = 0;
-        std::fill(metaReceived_.begin(), metaReceived_.end(), (uint8_t)0);
-        std::fill(metaRequestedMs_.begin(), metaRequestedMs_.end(), (int64_t)0);
+        metaBuf_.clear();
+        metaReceived_.clear();
+        metaRequestedMs_.clear();
         return;
     }
     logInfo("engine: metadata verified — '%s' %lld bytes, %d files", meta_.name.c_str(), (long long)meta_.totalLength,
