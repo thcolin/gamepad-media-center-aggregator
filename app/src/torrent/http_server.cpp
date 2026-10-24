@@ -240,8 +240,12 @@ void HttpServer::handleClient(int fd) {
                 std::string b = lower.substr(dash + 1, crlf - dash - 1);
                 // An exception escaping a detached thread terminates the process.
                 try {
-                    if (!a.empty()) start = std::stoll(a);
-                    if (!b.empty()) end = std::stoll(b);
+                    if (!a.empty()) {
+                        start = std::stoll(a);
+                        if (!b.empty()) end = std::stoll(b);
+                    } else if (!b.empty()) {  // suffix range: the last N bytes
+                        start = fileLength_ - std::stoll(b);
+                    }
                     partial = true;
                 } catch (const std::exception&) {
                     start = 0;
