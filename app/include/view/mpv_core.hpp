@@ -184,6 +184,11 @@ private:
     mpv_render_context *mpv_context = nullptr;
     brls::Rect rect = {0, 0, 1920, 1080};
     bool video_stopped = true;
+#ifdef __PS4__
+    int usb_escapes = 0;  // loads from /mnt/usb still holding a ps4::beginEscape
+    bool usb_file_loaded = false;  // FILE_LOADED seen for the current load: its escape is already released
+    void releaseUsbEscape();
+#endif
     bool video_paused = false;
     bool voEnabled = true;  // false in audio-only mode (music): keep playing when backgrounded
     int64_t cache_speed = 0;  // Bps

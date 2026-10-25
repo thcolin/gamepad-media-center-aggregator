@@ -7,6 +7,7 @@
 
 #ifdef __PS4__
 #include "client/posix_list.hpp"
+#include "utils/ps4_escape.hpp"
 #include <borealis/core/logger.hpp>
 #endif
 
@@ -85,6 +86,9 @@ std::vector<DirEntry> Local::list(const std::string& path) {
     // be started from the disc root without diving into BDMV/STREAM (issue
     // #18). Full bd:// navigation would need libbluray, which none of the mpv
     // builds bundle, so the .m2ts streams are played directly instead.
+#ifdef __PS4__
+    ps4::SandboxEscape escape(p);  // only for /mnt/usb paths; dropped when this function returns
+#endif
     std::string stream = findBlurayStream(p);
     if (!stream.empty()) {
         DirEntry bd;

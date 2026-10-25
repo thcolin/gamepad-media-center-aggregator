@@ -7,6 +7,9 @@
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
 #include "utils/log_redact.hpp"
+#ifdef __PS4__
+#include "utils/ps4_escape.hpp"
+#endif
 #include "api/http.hpp"
 #ifdef __PS4__
 #include "utils/default_font.hpp"
@@ -440,11 +443,25 @@ void MPVCore::init() {
 #endif
 }
 
+#ifdef __PS4__
+// One end per loadfile from /mnt/usb. The escape is only needed to open the file: it is
+// released on FILE_LOADED (fd held), or on END_FILE when the load failed before that, and
+// clean() drains whatever is left. Holding it longer hides /app0 from the settings menu.
+void MPVCore::releaseUsbEscape() {
+    if (usb_escapes <= 0) return;
+    usb_escapes--;
+    ps4::endEscape();
+}
+#endif
+
 void MPVCore::clean() {
     check_error(mpv_command_string(this->mpv, "quit"));
     brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
     brls::Application::getWindowSizeChangedEvent()->unsubscribe(sizeSubscription);
 
+#ifdef __PS4__
+    while (usb_escapes > 0) releaseUsbEscape();
+#endif
     brls::Logger::info("trying free mpv context");
     if (this->mpv_context) {
         mpv_render_context_free(this->mpv_context);
@@ -672,12 +689,19 @@ void MPVCore::eventMainLoop() {
         case MPV_EVENT_FILE_LOADED:
             brls::Logger::info("MPVCore => EVENT_FILE_LOADED");
             // event 8: 文件预加载结束，准备解码
+#ifdef __PS4__
+            usb_file_loaded = true;
+            releaseUsbEscape();  // the file is open: back inside the sandbox
+#endif
             mpvCoreEvent.fire(MpvEventEnum::MPV_LOADED);
             break;
         case MPV_EVENT_START_FILE:
             // event 6: 开始加载文件
             this->last_error_line.clear();  // errors from a previous load are stale
             this->last_warn_line.clear();
+#ifdef __PS4__
+            usb_file_loaded = false;
+#endif
             this->load_generation++;
             brls::Logger::info("MPVCore => EVENT_START_FILE");
             mpvCoreEvent.fire(MpvEventEnum::START_FILE);
@@ -697,6 +721,9 @@ void MPVCore::eventMainLoop() {
         case MPV_EVENT_END_FILE: {
             // event 7: 文件播放结束
             this->video_stopped = true;
+#ifdef __PS4__
+            if (!usb_file_loaded) releaseUsbEscape();  // failed or stopped before FILE_LOADED
+#endif
             auto node = (mpv_event_end_file *)event->data;
             if (node->reason == MPV_END_FILE_REASON_ERROR) {
                 this->last_error = node->error;
@@ -855,13 +882,24 @@ void MPVCore::reset() {
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method, uint64_t userdata) {
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, url, extra);
+#ifdef __PS4__
+    bool usbEscape = url.rfind("/mnt/usb", 0) == 0;
+    if (usbEscape) {
+        ps4::beginEscape();
+        usb_escapes++;
+    }
+#endif
+    int submitRc;
     if (mpv_client_api_version() >= MPV_MAKE_VERSION(2, 3)) {
         const char *cmd[] = {"loadfile", url.c_str(), method.c_str(), "0", extra.c_str(), nullptr};
-        mpv_command_async(this->mpv, userdata, cmd);
+        submitRc = mpv_command_async(this->mpv, userdata, cmd);
     } else {
         const char *cmd[] = {"loadfile", url.c_str(), method.c_str(), extra.c_str(), nullptr};
-        mpv_command_async(this->mpv, userdata, cmd);
+        submitRc = mpv_command_async(this->mpv, userdata, cmd);
     }
+#ifdef __PS4__
+    if (usbEscape && submitRc < 0) releaseUsbEscape();  // never queued: no END_FILE will follow
+#endif
 }
 
 void MPVCore::togglePlay() { this->command("cycle", "pause"); }
