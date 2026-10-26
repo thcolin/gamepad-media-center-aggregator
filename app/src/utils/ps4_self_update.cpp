@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstdarg>
 #include <cstring>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <vector>
@@ -202,21 +203,30 @@ void cleanUp(std::FILE* log) {
         lg(log, "cleanup: escape failed, the helper stays for now");
         return;
     }
+    // The console refuses deletes under /system with EROFS on most boots, while writes there work
+    // (the 2026-10-26 console runs, and Gold Torrent's). So a file that won't go is emptied
+    // instead: what stays is a folder of empty files, which the next update fills again.
     int rc = ps4::remountSystem(true);
     lg(log, "cleanup: /system read-write -> %d", rc);
+    long left = 0;  // bytes still in the helper's files
     if (rc == 0) {
-        for (const char* f : {"/eboot.bin", "/sce_module/libc.prx", "/sce_module/libSceFios2.prx", "/sce_sys/param.sfo"})
-            if (unlink((helperDir + f).c_str()) != 0 && errno != ENOENT)
-                lg(log, "cleanup: unlink %s%s: %s", helperDir.c_str(), f, std::strerror(errno));
-        for (const char* d : {"/sce_module", "/sce_sys", ""})
-            if (rmdir((helperDir + d).c_str()) != 0 && errno != ENOENT)
-                lg(log, "cleanup: rmdir %s%s: %s", helperDir.c_str(), d, std::strerror(errno));
+        for (const char* f : {"/eboot.bin", "/sce_module/libc.prx", "/sce_module/libSceFios2.prx", "/sce_sys/param.sfo"}) {
+            const std::string path = helperDir + f;
+            if (unlink(path.c_str()) == 0 || errno == ENOENT) continue;
+            const int fd = open(path.c_str(), O_WRONLY | O_TRUNC);
+            if (fd >= 0) close(fd);
+            if (stat(path.c_str(), &st) == 0) left += (long)st.st_size;
+        }
+        for (const char* d : {"/sce_module", "/sce_sys", ""}) rmdir((helperDir + d).c_str());
     }
     const bool gone = stat(helperDir.c_str(), &st) != 0;
-    rc = ps4::remountSystem(false);
+    const int ro = ps4::remountSystem(false);
     ps4::endEscape();
-    lg(log, "cleanup: /system read-only -> %d; helper %s", rc, gone ? "removed" : "still there, retried next launch");
-    if (gone) unlink(helperMarker);
+    lg(log, "cleanup: /system read-only -> %d; helper %s", ro,
+        gone ? "removed" : rc != 0 ? "left as it was" : left == 0 ? "emptied (the console kept the folder)" : "partly emptied");
+    // One try per update: a failed one waits for the next update instead of remounting /system on
+    // every launch.
+    unlink(helperMarker);
 }
 
 }  // namespace ps4::update

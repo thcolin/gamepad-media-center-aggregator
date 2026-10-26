@@ -38,10 +38,11 @@ std::string lastStatus();
 /// Forgets the last status (once the app has shown it).
 void clearStatus();
 
-/// Takes out what an earlier update left: the helper's folder under /system (the helper's own
-/// unlink there fails with EROFS, the app's writes there work) and a log past 64 KB. Does nothing
-/// while an update may still be running ("waiting" or "installing") or when no helper was
-/// installed. Runs inside the escape, so call it off the main thread, once startup is over.
+/// Takes out what an earlier update left: the helper's files under /system and a log past 64 KB.
+/// The console refuses most deletes there, so a file that won't go is emptied instead. One try
+/// per update. Does nothing while an update may still be running ("waiting" or "installing") or
+/// when no helper was installed. Runs inside the escape, so call it off the main thread, once
+/// startup is over.
 void cleanUp(std::FILE* log = nullptr);
 
 }  // namespace ps4::update
