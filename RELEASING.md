@@ -24,7 +24,8 @@ fails the build instead of shipping a broken release:
    (the project info block, ~line 55). These three concatenated must match the
    tag. If you ship the PS Vita build, also bump `VITA_VERSION` (2-digit
    `MM.NN` format, separate from the main version — not enforced by the
-   workflow).
+   workflow). It is the PS4 package version too: bump it for every PS4
+   release, so the in-app update installs a newer package over the old one.
 
 3. **Promo site** — bump the static `data-version` fallback to `vX.Y.Z` in all
    three pages. `site/assets/js/main.js` overwrites it at runtime by fetching
