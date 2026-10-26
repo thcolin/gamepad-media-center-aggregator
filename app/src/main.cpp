@@ -310,6 +310,14 @@ int main(int argc, char* argv[]) {
         });
     }
     if (lastUpdate.rfind("failed", 0) == 0 || lastUpdate.rfind("done", 0) == 0) ps4::update::clearStatus();
+    // and take out what it left under /system, once startup is over (the cleanup runs inside the
+    // escape, where a module load from another thread would end the app)
+    ThreadPool::instance().submit([](HTTP& s) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::FILE* log = std::fopen(ps4::update::appLog, "a");
+        ps4::update::cleanUp(log);
+        if (log) std::fclose(log);
+    });
 #endif
 
     // Run the app

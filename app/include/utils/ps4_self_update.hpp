@@ -22,6 +22,10 @@ constexpr const char* requestFile = "/data/GMCA/update/request.txt";
 constexpr const char* statusFile = "/data/GMCA/update/status.txt";
 /// The helper's own log, appended across runs.
 constexpr const char* helperLog = "/data/GMCA/update/updater.log";
+/// The app's log of its update steps, appended across updates.
+constexpr const char* appLog = "/data/GMCA/update/app.log";
+/// Written before the helper goes under /system, removed once cleanUp() has taken it out.
+constexpr const char* helperMarker = "/data/GMCA/update/helper.txt";
 
 /// Starts the update to the package at `pkgPath` (under /data, normally stagedPkg). `label` is
 /// the version the user sees ("1.4.4"). True once the helper is running and waiting: the caller
@@ -33,6 +37,12 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
 std::string lastStatus();
 /// Forgets the last status (once the app has shown it).
 void clearStatus();
+
+/// Takes out what an earlier update left: the helper's folder under /system (the helper's own
+/// unlink there fails with EROFS, the app's writes there work) and a log past 64 KB. Does nothing
+/// while an update may still be running ("waiting" or "installing") or when no helper was
+/// installed. Runs inside the escape, so call it off the main thread, once startup is over.
+void cleanUp(std::FILE* log = nullptr);
 
 }  // namespace ps4::update
 #endif

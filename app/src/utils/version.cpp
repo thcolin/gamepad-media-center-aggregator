@@ -371,7 +371,7 @@ static void installPs4Update(const std::string& latest_ver) {
     brls::Application::notify("main/setting/others/installing"_i18n);
     ThreadPool::instance().submit([latest_ver](HTTP& s) {
         std::string err;
-        std::FILE* log = std::fopen(fmt::format("{}/app.log", ps4::update::dir).c_str(), "a");
+        std::FILE* log = std::fopen(ps4::update::appLog, "a");
         if (log) std::fprintf(log, "\n==== update to %s from %s ====\n", latest_ver.c_str(), AppVersion::getVersion().c_str());
         bool ok = ps4::update::start(ps4::update::stagedPkg, latest_ver, err, log);
         if (log) {

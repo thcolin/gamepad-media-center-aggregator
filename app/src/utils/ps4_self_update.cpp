@@ -141,6 +141,8 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
         lg(log, "escape failed");
         return false;
     }
+    // before any write under /system, so even a half-written helper gets taken out later
+    ps4::writeFile(helperMarker, helperDir + "\n");
     files[0].data = daemonSfo(log);
     bool ok = !files[0].data.empty() && installHelper(files, log);
     int launched = 0;
@@ -185,6 +187,37 @@ std::string lastStatus() {
 }
 
 void clearStatus() { unlink(statusFile); }
+
+void cleanUp(std::FILE* log) {
+    struct stat st;
+    for (const char* f : {helperLog, appLog})
+        if (stat(f, &st) == 0 && st.st_size > 64 * 1024) unlink(f);
+
+    if (stat(helperMarker, &st) != 0) return;  // no helper went under /system
+    const std::string status = lastStatus();
+    if (status == "waiting" || status == "installing") return;  // it may still be at work
+
+    if (!ps4::beginEscape()) {
+        ps4::endEscape();
+        lg(log, "cleanup: escape failed, the helper stays for now");
+        return;
+    }
+    int rc = ps4::remountSystem(true);
+    lg(log, "cleanup: /system read-write -> %d", rc);
+    if (rc == 0) {
+        for (const char* f : {"/eboot.bin", "/sce_module/libc.prx", "/sce_module/libSceFios2.prx", "/sce_sys/param.sfo"})
+            if (unlink((helperDir + f).c_str()) != 0 && errno != ENOENT)
+                lg(log, "cleanup: unlink %s%s: %s", helperDir.c_str(), f, std::strerror(errno));
+        for (const char* d : {"/sce_module", "/sce_sys", ""})
+            if (rmdir((helperDir + d).c_str()) != 0 && errno != ENOENT)
+                lg(log, "cleanup: rmdir %s%s: %s", helperDir.c_str(), d, std::strerror(errno));
+    }
+    const bool gone = stat(helperDir.c_str(), &st) != 0;
+    rc = ps4::remountSystem(false);
+    ps4::endEscape();
+    lg(log, "cleanup: /system read-only -> %d; helper %s", rc, gone ? "removed" : "still there, retried next launch");
+    if (gone) unlink(helperMarker);
+}
 
 }  // namespace ps4::update
 #endif
