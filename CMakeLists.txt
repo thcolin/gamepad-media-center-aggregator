@@ -65,12 +65,18 @@ set(PROJECT_TITLEID "0500474D43410000")
 set(PROJECT_AUTHOR "thcolin")
 set(PACKAGE_NAME "fun.thcolin.gmca")
 set(VITA_TITLEID "GMCA00001")
-set(PSN_TITLE_ID "GMCA00000")
+# PSN_TITLE_ID can be overridden (-DPSN_TITLE_ID=...) for a side-by-side diag
+# build so it installs next to real GMCA instead of over it.
+if (NOT PSN_TITLE_ID)
+    set(PSN_TITLE_ID "GMCA00000")
+endif()
 # VITA_VERSION is the Vita package version (2-digit MM.NN, independent of the
 # main version). Bumped every Vita release so the package version never
 # regresses; 00.23 shipped with the broken v1.0.3 VPK, 00.24 is the first that
 # actually installs.
-set(VITA_VERSION "00.30")
+if (NOT VITA_VERSION)
+    set(VITA_VERSION "00.30")
+endif()
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/icon.jpg)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
@@ -380,6 +386,54 @@ elseif (PLATFORM_PSV)
         FILE ${PSV_ASSETS_FILES}
     )
 elseif (PLATFORM_PS4)
+    # Diag self-update test harness, off unless -DGMCA_UPDATE_TEST=<tag> is passed.
+    if (GMCA_UPDATE_TEST)
+        add_compile_definitions(GMCA_UPDATE_TEST GMCA_UPDATE_TEST_TAG="${GMCA_UPDATE_TEST}")
+        # and, with -DGMCA_UPDATE_API_URL=<url>, the update check reads a test server's
+        # releases/latest JSON instead of GitHub's
+        if (GMCA_UPDATE_API_URL)
+            add_compile_definitions(GMCA_UPDATE_API_URL="${GMCA_UPDATE_API_URL}")
+        endif()
+    endif()
+    # Home-screen name, overridable so a diag build reads apart from real GMCA.
+    if (NOT PS4_PKG_NAME)
+        set(PS4_PKG_NAME ${PROJECT_NAME})
+    endif()
+    # Self-update helper (app/platform/ps4/updater, see utils/ps4_self_update.hpp): its own
+    # executable, signed as a system daemon with the program auth id Itemzflow's daemon and Gold
+    # Torrent's service have (the installer's library won't load in an app), shipped in the
+    # package as updater.self. The app installs it as /system/vsh/app/<PS4_UPDATER_TITLE_ID>.
+    if (NOT PS4_UPDATER_TITLE_ID)
+        set(PS4_UPDATER_TITLE_ID "GMCU00000")
+    endif()
+    set(PS4_TITLE_DEFINITIONS
+        GMCA_PS4_TITLE_ID="${PSN_TITLE_ID}"
+        GMCA_PS4_UPDATER_TITLE_ID="${PS4_UPDATER_TITLE_ID}"
+        GMCA_PS4_APP_NAME="${PS4_PKG_NAME}")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ${PS4_TITLE_DEFINITIONS} GMCA_PS4_APP)
+    add_executable(gmca-updater
+        ${CMAKE_SOURCE_DIR}/app/platform/ps4/updater/main.cpp
+        ${CMAKE_SOURCE_DIR}/app/platform/ps4/updater/heap.c
+        ${CMAKE_SOURCE_DIR}/app/platform/ps4/cxa_guard.c
+        ${CMAKE_SOURCE_DIR}/app/src/utils/ps4_escape.cpp
+        ${CMAKE_SOURCE_DIR}/app/src/utils/ps4_system.cpp)
+    set_target_properties(gmca-updater PROPERTIES CXX_STANDARD 17)
+    target_include_directories(gmca-updater PRIVATE app/include)
+    target_compile_definitions(gmca-updater PRIVATE ${PS4_TITLE_DEFINITIONS})
+    target_link_libraries(gmca-updater PRIVATE SceSysmodule SceAppInstUtil SceBgft)
+    # add_self's auth info (the toolchain keeps it inside the function)
+    set(PS4_AUTH_INFO "000000000000000000000000001C004000FF000000000080000000000000000000000000000000000000008000400040000000000000008000000000000000080040FFFF000000F000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/updater ${CMAKE_BINARY_DIR}/ps4)
+    add_custom_command(
+        OUTPUT ${CMAKE_BINARY_DIR}/ps4/updater.self
+        COMMAND ${CMAKE_COMMAND} -E env "OO_PS4_TOOLCHAIN=${OPENORBIS}" "${OPENORBIS}/bin/create-fself"
+            "-in=$<TARGET_FILE:gmca-updater>" "-out=gmca-updater.oelf" "--eboot" "updater.self"
+            "--paid" "0x3100000000000002" "--authinfo" "${PS4_AUTH_INFO}"
+        COMMAND ${CMAKE_COMMAND} -E copy updater.self ${CMAKE_BINARY_DIR}/ps4/updater.self
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/updater
+        DEPENDS gmca-updater
+        VERBATIM)
+    add_custom_target(gmca-updater_self ALL DEPENDS ${CMAKE_BINARY_DIR}/ps4/updater.self)
     # param.sfo ATTRIBUTE: 0x800000 is PS4 Pro mode. 0x20 makes system dialogs such as the
     # keyboard take their enter button from the console's setting, as borealis does for the app's
     # own keys; without it the keyboard confirmed with Circle on a console set to Cross. Tested on
@@ -391,10 +445,14 @@ elseif (PLATFORM_PS4)
     add_pkg(${PROJECT_NAME}
             ${CMAKE_BINARY_DIR}/ps4
             ${PSN_TITLE_ID}
-            ${PROJECT_NAME}
+            ${PS4_PKG_NAME}
             ${VITA_VERSION}
             ${PS4_SFO_ATTRIBUTE}
     )
+    # the helper is in place before the package is built, and its create-fself never runs
+    # alongside the app's
+    add_dependencies(${PROJECT_NAME}_self gmca-updater_self)
+    add_dependencies(${PROJECT_NAME}_pkg gmca-updater_self)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${BOREALIS_DIR}/ps4/sce_module ${CMAKE_BINARY_DIR}/ps4/sce_module
         COMMAND "${CMAKE_COMMAND}" -E copy_directory ${CMAKE_SOURCE_DIR}/app/platform/ps4/sce_sys ${CMAKE_BINARY_DIR}/ps4/sce_sys

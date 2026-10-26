@@ -24,21 +24,23 @@ void Dialog::cancelable(const std::string& msg, Callback cb) {
 /// 退出应用提示
 void Dialog::quitApp(bool restart, const std::string& msg) {
     auto dialog = new brls::Dialog(msg.empty() ? "main/setting/quit_hint"_i18n : msg);
-    dialog->addButton("hints/ok"_i18n, [restart]() {
-        brls::Box* container = new brls::Box();
-        container->setJustifyContent(brls::JustifyContent::CENTER);
-        container->setAlignItems(brls::AlignItems::CENTER);
-        brls::Label* hint = new brls::Label();
-        hint->setFocusable(true);
-        hint->setHideHighlight(true);
-        hint->setFontSize(32);
-        hint->setText("hints/quit"_i18n);
-        container->addView(hint);
-        container->setBackgroundColor(brls::Application::getTheme().getColor("brls/background"));
-        brls::Application::pushActivity(new brls::Activity(container), brls::TransitionAnimation::NONE);
-        brls::Application::getPlatform()->exitToHomeMode(!restart);
-        brls::Application::quit();
-    });
+    dialog->addButton("hints/ok"_i18n, [restart]() { quitAppNow(restart); });
     dialog->setCancelable(false);
     dialog->open();
+}
+
+void Dialog::quitAppNow(bool restart) {
+    brls::Box* container = new brls::Box();
+    container->setJustifyContent(brls::JustifyContent::CENTER);
+    container->setAlignItems(brls::AlignItems::CENTER);
+    brls::Label* hint = new brls::Label();
+    hint->setFocusable(true);
+    hint->setHideHighlight(true);
+    hint->setFontSize(32);
+    hint->setText("hints/quit"_i18n);
+    container->addView(hint);
+    container->setBackgroundColor(brls::Application::getTheme().getColor("brls/background"));
+    brls::Application::pushActivity(new brls::Activity(container), brls::TransitionAnimation::NONE);
+    brls::Application::getPlatform()->exitToHomeMode(!restart);
+    brls::Application::quit();
 }

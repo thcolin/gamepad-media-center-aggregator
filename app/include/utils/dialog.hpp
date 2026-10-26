@@ -16,4 +16,7 @@ public:
     /// Quit-app prompt; `msg` tailors the text to the context
     /// (e.g. update installed), empty = generic message
     static void quitApp(bool restart = true, const std::string& msg = "");
+
+    /// Quits right away, with quitApp's goodbye screen and no prompt
+    static void quitAppNow(bool restart = true);
 };

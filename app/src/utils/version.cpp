@@ -6,6 +6,9 @@
 #include <psp2/vshbridge.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
+#elif defined(__PS4__)
+#include <sys/stat.h>
+#include "utils/ps4_self_update.hpp"
 #elif defined(ANDROID)
 #include <SDL2/SDL.h>
 #include <jni.h>
@@ -312,6 +315,120 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
         }
     });
 }
+#elif defined(__PS4__)
+static int64_t ps4FileSize(const std::string& path) {
+    struct stat st;
+    if (stat(path.c_str(), &st) != 0) return -1;
+    return static_cast<int64_t>(st.st_size);
+}
+
+/// Hands the downloaded package to the update helper (cf. ps4::update::start) and closes GMCA at
+/// once: the system can only install over a closed app, and the helper waits a minute at most.
+/// On failure GMCA stays open and the package is kept.
+static void installPs4Update(const std::string& latest_ver) {
+    brls::Application::notify("main/setting/others/installing"_i18n);
+    ThreadPool::instance().submit([latest_ver](HTTP& s) {
+        std::string err;
+        std::FILE* log = std::fopen(ps4::update::appLog, "a");
+        if (log) std::fprintf(log, "\n==== update to %s from %s ====\n", latest_ver.c_str(), AppVersion::getVersion().c_str());
+        bool ok = ps4::update::start(ps4::update::stagedPkg, latest_ver, err, log);
+        if (log) {
+            std::fprintf(log, "%s%s\n", ok ? "helper waiting, closing GMCA" : "FAILED: ", ok ? "" : err.c_str());
+            std::fclose(log);
+        }
+        brls::sync([ok, err]() {
+            if (ok)
+                Dialog::quitAppNow(false);
+            else
+                Dialog::show(brls::getStr("main/setting/others/ps4_update_failed", err) + "\n" +
+                             brls::getStr("main/setting/others/ps4_update_kept", ps4::update::stagedPkg));
+        });
+    });
+}
+
+/// Downloads the release .pkg into the update folder and verifies its size, then asks before
+/// installing: GMCA has to close for the PS4 to install over it, and the user opens it again once
+/// the system says the update is installed (no relaunch, cf. utils/ps4_self_update.hpp). Progress
+/// is shown in a dialog with a cancel button.
+static void startUpdate(const std::string& latest_ver, const std::string& url, int64_t size) {
+    AppVersion::updating->store(false);
+
+    brls::Style style = brls::Application::getStyle();
+    auto* label = new brls::Label();
+    label->setFontSize(style["brls/dialog/fontSize"]);
+    label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+    label->setSingleLine(false);
+    label->setText(brls::getStr("main/setting/others/downloading", latest_ver, 0));
+
+    auto* box = new brls::Box();
+    box->addView(label);
+    box->setAlignItems(brls::AlignItems::CENTER);
+    box->setJustifyContent(brls::JustifyContent::CENTER);
+    box->setPadding(style["brls/dialog/paddingTopBottom"], style["brls/dialog/paddingLeftRight"],
+        style["brls/dialog/paddingTopBottom"], style["brls/dialog/paddingLeftRight"]);
+
+    auto* dialog = new brls::Dialog(box);
+    dialog->setCancelable(false);
+    auto dismissed = std::make_shared<std::atomic_bool>(false);
+    dialog->addButton("hints/cancel"_i18n, [dismissed]() {
+        dismissed->store(true);
+        AppVersion::updating->store(true);  // true = cancel the transfer, cf. HTTP::easy_progress_cb
+    });
+    dialog->open();
+
+    ThreadPool::instance().submit([latest_ver, url, size, label, dialog, dismissed](HTTP& s) {
+        std::string path = ps4::update::stagedPkg;
+
+        auto finish = [dialog, dismissed](std::function<void()> then) {
+            brls::sync([dialog, dismissed, then]() {
+                if (dismissed->exchange(true))
+                    then();
+                else
+                    dialog->close(then);
+            });
+        };
+
+        auto last = std::make_shared<std::chrono::steady_clock::time_point>();
+        HTTP::Progress::Callback progress = [latest_ver, label, dismissed, last](curl_off_t total, curl_off_t now) {
+            auto tp = std::chrono::steady_clock::now();
+            if (total <= 0 || tp - *last < std::chrono::milliseconds(500)) return;
+            *last = tp;
+            int percent = static_cast<int>(now * 100 / total);
+            brls::sync([label, dismissed, latest_ver, percent]() {
+                if (!dismissed->load())
+                    label->setText(brls::getStr("main/setting/others/downloading", latest_ver, percent));
+            });
+        };
+
+        try {
+            mkdir(AppConfig::instance().configDir().c_str(), 0777);
+            mkdir(ps4::update::dir, 0777);
+            std::remove(path.c_str());
+            HTTP::download(url, path, HTTP::Timeout{-1}, AppVersion::updating, progress);
+
+            // size verified BEFORE handing the package to the installer
+            int64_t actual = ps4FileSize(path);
+            if (size > 0 && actual != size)
+                throw std::runtime_error(fmt::format("incomplete download ({}/{} bytes)", actual, size));
+            AppVersion::updating->store(true);
+
+            finish([latest_ver]() {
+                auto* confirm = new brls::Dialog(brls::getStr("main/setting/others/ps4_install", latest_ver));
+                confirm->setCancelable(false);
+                confirm->addButton("hints/cancel"_i18n, []() { std::remove(ps4::update::stagedPkg); });
+                confirm->addButton("hints/ok"_i18n, [latest_ver]() { installPs4Update(latest_ver); });
+                confirm->open();
+            });
+        } catch (const std::exception& ex) {
+            std::remove(path.c_str());
+            bool canceled = AppVersion::updating->load();
+            AppVersion::updating->store(true);
+            if (canceled) return;  // user cancellation, not a failure
+            std::string msg = ex.what();
+            finish([msg]() { Dialog::show(msg); });
+        }
+    });
+}
 #endif
 
 // Update popup content: the version prompt + the new release's notes (GitHub
@@ -343,7 +460,11 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
         // at startup, give priority to login requests
         if (delay > 0) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         try {
+#ifdef GMCA_UPDATE_API_URL
+            std::string url = GMCA_UPDATE_API_URL;  // diag builds only: a test server instead of GitHub
+#else
             std::string url = fmt::format("https://api.github.com/repos/{}/releases/latest", git_repo);
+#endif
             auto resp = HTTP::get(url, HTTP::Timeout{});
             nlohmann::json j = nlohmann::json::parse(resp);
             std::string latest_ver = j.at("tag_name").get<std::string>();
@@ -356,15 +477,17 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
             // release notes shown in the popup (only this version's changelog)
             std::string release_body = j.value("body", std::string());
 
-#if defined(__SWITCH__) || defined(__PSV__)
+#if defined(__SWITCH__) || defined(__PSV__) || defined(__PS4__)
             // Installable asset URL and size from the API response rather than a
             // hardcoded URL: robust to an asset rename, and the size lets us
             // validate the download before installing. Switch ships an .nro,
-            // Vita a .vpk.
+            // Vita a .vpk, PS4 a .pkg.
 #ifdef __SWITCH__
             const std::string asset_ext = ".nro";
-#else
+#elif defined(__PSV__)
             const std::string asset_ext = ".vpk";
+#else
+            const std::string asset_ext = ".pkg";
 #endif
             std::string asset_url;
             int64_t asset_size = 0;

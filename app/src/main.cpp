@@ -43,6 +43,9 @@
 
 #ifdef __PS4__
 #include <csignal>
+#include <sys/stat.h>
+#include "utils/dialog.hpp"
+#include "utils/ps4_self_update.hpp"
 #endif
 
 using namespace brls::literals;  // for _i18n
@@ -89,6 +92,66 @@ static void proposeForwarderInstall() {
 }
 #endif
 
+#ifdef GMCA_UPDATE_TEST
+#include "utils/ps4_self_update.hpp"
+#include "utils/ps4_system.hpp"
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <sys/stat.h>
+#include <unistd.h>
+#ifndef GMCA_UPDATE_TEST_TAG
+#define GMCA_UPDATE_TEST_TAG "?"
+#endif
+// Diag-only self-update test (a throwaway diag title id, never real GMCA). If a package was
+// dropped at target.pkg, move it to the update folder and hand it to the update helper the way
+// the real updater will, then close so the helper can install it. Every launch logs which build
+// runs and the helper's last status, then (with nothing dropped) launches normally.
+static void gmca_update_test_maybe_run() {
+    const char* dir = "/data/GMCA-update-test";
+    const char* target = "/data/GMCA-update-test/target.pkg";
+    const char* logpath = "/data/GMCA-update-test/update-test.log";
+    mkdir(dir, 0777);
+    std::FILE* log = std::fopen(logpath, "a");
+    if (log) {
+        std::fprintf(log, "\n==== launched, tag=%s version=%s ====\n", GMCA_UPDATE_TEST_TAG,
+            AppVersion::getVersion().c_str());
+        std::string last = ps4::update::lastStatus();
+        std::fprintf(log, "helper's last status: %s (its log: %s)\n", last.empty() ? "none" : last.c_str(),
+            ps4::update::helperLog);
+        std::fflush(log);
+    }
+    struct stat st;
+    if (stat(target, &st) != 0) {
+        if (log) {
+            std::fprintf(log, "no target.pkg, continuing to a normal launch\n");
+            std::fclose(log);
+        }
+        return;
+    }
+    // Moved, not copied: a failed install keeps it in the update folder instead of retrying on
+    // every launch.
+    mkdir("/data/GMCA", 0777);
+    mkdir(ps4::update::dir, 0777);
+    unlink(ps4::update::stagedPkg);
+    int moved = rename(target, ps4::update::stagedPkg);
+    if (log) std::fprintf(log, "move target.pkg -> %s: %s\n", ps4::update::stagedPkg, moved == 0 ? "ok" : std::strerror(errno));
+    std::string err;
+    bool ok = moved == 0 && ps4::update::start(ps4::update::stagedPkg, "(test build)", err, log);
+    if (log) {
+        std::fprintf(log, "update start %s%s\n", ok ? "OK, closing for the helper" : "FAILED: ", ok ? "" : err.c_str());
+        std::fclose(log);
+    }
+    if (!ok) {
+        ps4::notify("Update test failed: " + (moved == 0 ? err : std::string("could not move target.pkg")));
+        return;  // launch normally; update-test.log has the steps
+    }
+    ps4::loadExec("exit");  // the system's way out, so the helper sees the title closed
+    std::exit(0);
+}
+#endif
+
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__
     if (argc > 0 && argv[0]) AppVersion::nro_path = argv[0];
@@ -125,6 +188,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
+#ifdef GMCA_UPDATE_TEST
+    gmca_update_test_maybe_run();
+#endif
     std::setlocale(LC_ALL, "C.UTF-8");
     // Load cookies and settings
     auto& conf = AppConfig::instance();
@@ -227,6 +293,32 @@ int main(int argc, char* argv[]) {
 
     std::string v = conf.getItem(AppConfig::APP_UPDATE, std::string("NaN"));
     if (AppVersion::getVersion().compare(v)) AppVersion::checkUpdate();
+
+#ifdef __PS4__
+    // What the last in-app update did (utils/ps4_self_update.hpp): a failure is shown once, a
+    // success was already announced by the system's notification. "waiting" or "installing" stay:
+    // the helper may still be at work, and the next update clears them.
+    std::string lastUpdate = ps4::update::lastStatus();
+    if (lastUpdate.rfind("failed", 0) == 0) {
+        std::string why = lastUpdate.size() > 7 ? lastUpdate.substr(7) : lastUpdate;
+        struct stat st;
+        bool kept = stat(ps4::update::stagedPkg, &st) == 0;
+        brls::sync([why, kept]() {
+            std::string msg = brls::getStr("main/setting/others/ps4_update_failed", why);
+            if (kept) msg += "\n" + brls::getStr("main/setting/others/ps4_update_kept", ps4::update::stagedPkg);
+            Dialog::show(msg);
+        });
+    }
+    if (lastUpdate.rfind("failed", 0) == 0 || lastUpdate.rfind("done", 0) == 0) ps4::update::clearStatus();
+    // and take out what it left under /system, once startup is over (the cleanup runs inside the
+    // escape, where a module load from another thread would end the app)
+    ThreadPool::instance().submit([](HTTP& s) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::FILE* log = std::fopen(ps4::update::appLog, "a");
+        ps4::update::cleanUp(log);
+        if (log) std::fclose(log);
+    });
+#endif
 
     // Run the app
     while (brls::Application::mainLoop());

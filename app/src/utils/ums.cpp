@@ -62,16 +62,26 @@ int Ums::init() {
 
 #elif defined(__PS4__)
 #include <dirent.h>
+#include <cstring>
 #include <string>
+
+#include "utils/ps4_escape.hpp"
 
 int Ums::init() {
     this->devices.push_back(Device{.id = -1, .name = "HardDisk", .mount = "/data"});
     // USB drives the console mounted: /mnt/usb0 .. /mnt/usb7, those that open as folders
     for (int i = 0; i < 8; i++) {
         std::string mount = "/mnt/usb" + std::to_string(i);
-        if (DIR* d = opendir(mount.c_str())) {
+        ps4::SandboxEscape escape(mount);  // out of the sandbox only for this opendir
+        DIR* d = opendir(mount.c_str());
+        if (d) {
+            // the console keeps empty stub folders for unused slots: list only slots with content
+            int entries = 0;
+            while (struct dirent* e = readdir(d)) {
+                if (std::strcmp(e->d_name, ".") != 0 && std::strcmp(e->d_name, "..") != 0) entries++;
+            }
             closedir(d);
-            this->devices.push_back(Device{.id = -1, .name = "USB " + std::to_string(i + 1), .mount = mount});
+            if (entries >= 1) this->devices.push_back(Device{.id = -1, .name = "USB " + std::to_string(i + 1), .mount = mount});
         }
     }
     return 0;
