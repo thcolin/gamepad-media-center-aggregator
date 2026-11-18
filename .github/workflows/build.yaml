@@ -78,6 +78,11 @@ jobs:
         for p in GMCA-windows-*; do
           [[ -d "$p" ]] && 7z a -mx=9 "$p.7z" ./"$p"/* && rm -rf "$p"
         done
+        # Switch 1 updaters up to v1.4.0 install the first .nro of the release:
+        # the Switch 2 build ships zipped so they can never pick it
+        for p in GMCA-NintendoSwitch2-*; do
+          [[ -d "$p" ]] && 7z a -tzip GMCA-switch2.nro.zip ./"$p"/GMCA-switch2.nro && rm -rf "$p"
+        done
         tree
     - name: Release and Upload Assets
       uses: softprops/action-gh-release@v3
@@ -93,7 +98,7 @@ jobs:
           assets/GMCA-windows-*.7z
           assets/GMCA-macOS-*/*.dmg
           assets/GMCA-NintendoSwitch-deko3d-*/*.nro
-          assets/GMCA-NintendoSwitch2-*/*.nro
+          assets/GMCA-switch2.nro.zip
           assets/GMCA-PS4-*/*.pkg
           assets/GMCA-Vita-*/*.vpk
           assets/GMCA-Flatpak-*/*.flatpak
@@ -158,6 +163,8 @@ jobs:
 
   build-nx2:
     runs-on: ubuntu-latest
+    # third-party SDK: a Switch 2 failure must not hold back the other platforms' release
+    continue-on-error: true
     if: ${{ inputs.platform == 'nx2' || github.event_name != 'workflow_dispatch' }}
     container:
       image: devkitpro/devkita64:20260219
@@ -182,7 +189,12 @@ jobs:
         sdk="$(mktemp -d)"
         git clone https://github.com/ouncebrew/ounce-devkit.git "$sdk"
         git -C "$sdk" checkout 0f38ba80d7ee768c5749278f127749d14ece2036
-        bash "$sdk/install.sh" "20261115b"
+        # install.sh only pins the hash of its default version: check the archive here,
+        # a replaced release asset must fail the build
+        curl -fL --retry 3 -o "$sdk/devkit.tar.xz" \
+          https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261115b/ounce-devkit-20261115b.tar.xz
+        echo "e6866198bfb44144c8227288c6315772a6a505cacca54b08cd0e6232a84f4729  $sdk/devkit.tar.xz" | sha256sum -c -
+        bash "$sdk/install.sh" "$sdk/devkit.tar.xz"
         rm -rf "$sdk"
     - name: Cache Switch 2 FFmpeg 7.1 (--disable-nvtegra)
       uses: actions/cache@v4
