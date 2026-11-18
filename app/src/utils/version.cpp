@@ -358,6 +358,12 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
             // release notes shown in the popup (only this version's changelog)
             std::string release_body = j.value("body", std::string());
 
+#if defined(__SWITCH2__)
+            // the Switch 2 build ships as GMCA-switch2.nro.zip, installed by hand
+            brls::Logger::info("checkUpdate: {} available, install GMCA-switch2.nro.zip by hand", latest_ver);
+            return;
+#endif
+
 #if defined(__SWITCH__) || defined(__PSV__)
             // Installable asset URL and size from the API response rather than a
             // hardcoded URL: robust to an asset rename, and the size lets us
@@ -378,17 +384,7 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
                     name.compare(name.size() - asset_ext.size(), asset_ext.size(), asset_ext) == 0) {
                     std::string u = asset.at("browser_download_url").get<std::string>();
                     int64_t sz = asset.value("size", int64_t(0));
-#if defined(__SWITCH2__)
-                    if (name.find("switch2") != std::string::npos) {
-                        asset_url = u;
-                        asset_size = sz;
-                        break;
-                    }
-                    if (fallback_url.empty()) {
-                        fallback_url = u;
-                        fallback_size = sz;
-                    }
-#elif defined(__SWITCH__)
+#if defined(__SWITCH__)
                     if (name.find("switch1") != std::string::npos || name == "GMCA.nro") {
                         asset_url = u;
                         asset_size = sz;
