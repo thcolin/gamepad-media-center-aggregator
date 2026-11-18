@@ -78,24 +78,27 @@ if (heroStage) {
     stremio: { name: 'Stremio', color: '#7b5bf5', ink: '#9575f7' },
   };
   // Each device colours its own two words: Switch = Nintendo (blue) / Switch (red),
+  // Switch 2 = the glow of its two Joy-Con 2 sticks (cyan / coral),
   // Vita = PS (silver) / VITA lettered in the four PlayStation face-button colours
   // (△ green, ○ red, ✕ blue, □ pink), Pi = Raspberry (pink) / Pi (green).
   const DEV = {
     switch: { cap: 'Nintendo Switch', capColor: '#00c3e3', p1: 'Nintendo', c1: '#00c3e3', p2: 'Switch', c2: '#ff4554' },
+    switch2: { cap: 'Nintendo Switch 2', capColor: '#8fe3ef', p1: 'Nintendo', c1: '#8fe3ef', p2: 'Switch\u00a02', c2: '#ff7a5c' },
     vita: { cap: 'PS Vita', capColor: '#cfd2d7', p1: 'PS', c1: '#5f6470', p2: 'Vita', p2colors: ['#3ec98a', '#e5484d', '#4c7ff0', '#e7509f'] },
     pi: { cap: 'Raspberry Pi', capColor: '#6cc04a', p1: 'Raspberry', c1: '#ff5a9e', p2: 'Pi', c2: '#6cc04a' },
   };
-  // Every device × every media center = 12 combos. Stepping the device by +1
-  // (mod 3) and the media center by +1 (mod 4) each tick walks ALL 12 pairings
-  // exactly once per lap (gcd(3,4)=1), and — since neither index ever repeats
-  // between steps — no two consecutive frames share a device OR a media center,
-  // loop wrap included. The <img> order in the stage matches this same cycle.
-  const DEVS = ['switch', 'vita', 'pi'];
+  // Every device × every media center = 16 combos. Each tick steps the device
+  // by +1, and the media center by +1 plus one extra step per lap of devices:
+  // with 4 devices and 4 media centers a plain +1/+1 would only ever show 4
+  // pairings. This walks all 16 exactly once, and no two consecutive frames
+  // share a device OR a media center, loop wrap included. The <img> order in
+  // the stage matches this same cycle.
+  const DEVS = ['switch', 'vita', 'switch2', 'pi'];
   const MCS = ['plex', 'jellyfin', 'emby', 'stremio'];
-  const N = DEVS.length * MCS.length; // 12
+  const N = DEVS.length * MCS.length; // 16
 
   const apply = (n) => {
-    const mc = MC[MCS[n % MCS.length]];
+    const mc = MC[MCS[(n + Math.floor(n / DEVS.length)) % MCS.length]];
     const dev = DEV[DEVS[n % DEVS.length]];
     imgs.forEach((im, k) => im.classList.toggle('on', k === n));
     if (hero) {
