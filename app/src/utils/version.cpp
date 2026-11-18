@@ -361,6 +361,8 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
 #if defined(__SWITCH2__)
             // the Switch 2 build ships as GMCA-switch2.nro.zip, installed by hand
             brls::Logger::info("checkUpdate: {} available, install GMCA-switch2.nro.zip by hand", latest_ver);
+            if (showUpToDateDialog)
+                brls::sync([latest_ver]() { Dialog::show(brls::getStr("main/setting/others/upgrade_manual", latest_ver)); });
             return;
 #endif
 

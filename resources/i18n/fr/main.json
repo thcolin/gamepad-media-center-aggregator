@@ -383,6 +383,7 @@
       "logout": "Se déconnecter du compte actuel (l'application va se fermer)",
       "up2date": "L'application est déjà à jour",
       "upgrade": "Nouvelle version {} trouvée, souhaitez-vous mettre à jour ?",
+      "upgrade_manual": "La version {} est disponible. Sur Switch 2, téléchargez GMCA-switch2.nro.zip depuis la page de la release et copiez GMCA-switch2.nro à la main.",
       "updating": "Mise à jour en cours, souhaitez-vous annuler la mise à jour ?",
       "downloading": "Téléchargement de {}… {} %",
       "installing": "Installation de la mise à jour…",
