@@ -136,8 +136,12 @@ void MPVCore::init() {
 #endif
     this->mpv = mpv_create();
     if (!mpv) {
+#ifdef __SWITCH2__
         brls::Logger::error("Error Create mpv Handle");
         return;
+#else
+        brls::fatal("Error Create mpv Handle");
+#endif
     }
 
     auto &conf = AppConfig::instance();
@@ -269,9 +273,13 @@ void MPVCore::init() {
 
     if (mpv_initialize(mpv) < 0) {
         mpv_terminate_destroy(mpv);
+#ifdef __SWITCH2__
         mpv = nullptr;
         brls::Logger::error("Could not initialize mpv context");
         return;
+#else
+        brls::fatal("Could not initialize mpv context");
+#endif
     }
 
     this->setAspect(VIDEO_ASPECT);
@@ -401,9 +409,13 @@ void MPVCore::init() {
 #ifndef ANDROID
     if (mpv_render_context_create(&mpv_context, mpv, params) < 0) {
         mpv_terminate_destroy(mpv);
+#ifdef __SWITCH2__
         mpv = nullptr;
         brls::Logger::error("failed to initialize mpv render context");
         return;
+#else
+        brls::fatal("failed to initialize mpv context");
+#endif
     }
 #endif
 #ifdef BOREALIS_USE_D3D11
