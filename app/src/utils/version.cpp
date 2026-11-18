@@ -39,7 +39,9 @@ std::string AppVersion::getPackageName() { return STR(BUILD_PACKAGE_NAME); }
 std::string AppVersion::getCommit() { return STR(BUILD_TAG_SHORT); }
 
 std::string AppVersion::getPlatform() {
-#ifdef __SWITCH__
+#if defined(__SWITCH2__)
+    return "NX2";
+#elif defined(__SWITCH__)
     return "NX";
 #elif defined(__PSV__)
     return "PSVita";
@@ -368,14 +370,44 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
 #endif
             std::string asset_url;
             int64_t asset_size = 0;
+            std::string fallback_url;
+            int64_t fallback_size = 0;
             for (auto& asset : j.at("assets")) {
                 std::string name = asset.at("name").get<std::string>();
                 if (name.size() > asset_ext.size() &&
                     name.compare(name.size() - asset_ext.size(), asset_ext.size(), asset_ext) == 0) {
-                    asset_url = asset.at("browser_download_url").get<std::string>();
-                    asset_size = asset.value("size", int64_t(0));
+                    std::string u = asset.at("browser_download_url").get<std::string>();
+                    int64_t sz = asset.value("size", int64_t(0));
+#if defined(__SWITCH2__)
+                    if (name.find("switch2") != std::string::npos) {
+                        asset_url = u;
+                        asset_size = sz;
+                        break;
+                    }
+                    if (fallback_url.empty()) {
+                        fallback_url = u;
+                        fallback_size = sz;
+                    }
+#elif defined(__SWITCH__)
+                    if (name.find("switch1") != std::string::npos || name == "GMCA.nro") {
+                        asset_url = u;
+                        asset_size = sz;
+                        break;
+                    }
+                    if (fallback_url.empty() && name.find("switch2") == std::string::npos) {
+                        fallback_url = u;
+                        fallback_size = sz;
+                    }
+#else
+                    asset_url = u;
+                    asset_size = sz;
                     break;
+#endif
                 }
+            }
+            if (asset_url.empty()) {
+                asset_url = fallback_url;
+                asset_size = fallback_size;
             }
             if (asset_url.empty()) {
                 brls::Logger::error("checkUpdate: no {} asset in release {}", asset_ext, latest_ver);

@@ -389,7 +389,11 @@ bool AppConfig::init() {
 
     // 初始化是否使用硬件加速
     MPVCore::VO = this->getItem(MPV_VO, MPVCore::VO);
+#if defined(__SWITCH2__)
+    MPVCore::HARDWARE_DEC = this->getItem(PLAYER_HWDEC, false);
+#else
     MPVCore::HARDWARE_DEC = this->getItem(PLAYER_HWDEC, true);
+#endif
     MPVCore::FORCE_DIRECTPLAY = this->getItem(FORCE_DIRECTPLAY, false);
     // default transcode bitrate cap. The Vita decoder chokes on heavy direct
     // play (high-bitrate / unsupported codecs -> slideshow), so default to a

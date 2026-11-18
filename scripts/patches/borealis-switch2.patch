@@ -1,0 +1,442 @@
+diff --git a/library/CMakeLists.txt b/library/CMakeLists.txt
+index 1d8eca03..5a17bcb3 100644
+--- a/library/CMakeLists.txt
++++ b/library/CMakeLists.txt
+@@ -270,7 +270,11 @@ elseif(PLATFORM_SWITCH)
+     list(APPEND BRLS_PLATFORM_OPTION $<$<COMPILE_LANGUAGE:CXX>:-Wno-volatile> -DHAVE_LIBNX -DSWITCH -D__SWITCH__ -DSTBI_NO_THREAD_LOCALS)
+     find_package(PkgConfig REQUIRED)
+ 
+-    if (BOREALIS_USE_DEKO3D)
++    if (NINTENDO_SWITCH2)
++        list(APPEND BOREALIS_INCLUDE ${DEVKITPRO}/portlibs/switch2/include)
++        list(APPEND BRLS_PLATFORM_LIBS EGL nx m)
++        list(APPEND BRLS_PLATFORM_OPTION -D__SWITCH2__)
++    elseif (BOREALIS_USE_DEKO3D)
+         list(APPEND BRLS_PLATFORM_LIBS deko3d nx m)
+     elseif (USE_SDL2)
+         find_package(SDL2 REQUIRED)
+@@ -304,7 +308,7 @@ list(APPEND BOREALIS_SOURCE
+         ${BOREALIS_PATH}/lib/extern/libretro-common/encodings
+         ${BOREALIS_PATH}/lib/extern/libretro-common/features
+         )
+-if (PLATFORM_PSV OR PLATFORM_PS4 OR BOREALIS_USE_D3D11)
++if (PLATFORM_PSV OR PLATFORM_PS4 OR BOREALIS_USE_D3D11 OR NINTENDO_SWITCH2)
+         list(REMOVE_ITEM BOREALIS_SOURCE ${BOREALIS_PATH}/lib/extern/glad)
+ endif ()
+ 
+diff --git a/library/cmake/commonOption.cmake b/library/cmake/commonOption.cmake
+index 092460ce..49a8067d 100644
+--- a/library/cmake/commonOption.cmake
++++ b/library/cmake/commonOption.cmake
+@@ -36,6 +36,7 @@ set(IOS_CODE_SIGN_IDENTITY "" CACHE STRING "The code sign identity to use when b
+ set(IOS_GUI_IDENTIFIER "" CACHE STRING "Package name.")
+ 
+ # Nintendo Switch Only
++option(NINTENDO_SWITCH2 "Build for Nintendo Switch 2 (libounce + OunceVK)." OFF)
+ cmake_dependent_option(USE_DEKO3D "Using deko3d instead of OpenGL." OFF "PLATFORM_SWITCH" OFF)
+ 
+ option(USE_BOOST_FILESYSTEM "Whether to use the boost::filesystem instead of std::filesystem" OFF)
+diff --git a/library/cmake/toolchain.cmake b/library/cmake/toolchain.cmake
+index 13227946..6aaf2b68 100644
+--- a/library/cmake/toolchain.cmake
++++ b/library/cmake/toolchain.cmake
+@@ -83,11 +83,21 @@ elseif (PLATFORM_SWITCH)
+     endif ()
+     set(DEVKITPRO $ENV{DEVKITPRO} CACHE BOOL "DEVKITPRO")
+     set(__SWITCH__ ON)
+-    set(CMAKE_C_FLAGS "-I${DEVKITPRO}/libnx/include -I${DEVKITPRO}/portlibs/switch/include")
+-    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
+-    include(${DEVKITPRO}/cmake/Switch.cmake REQUIRED)
+-    if (NOT USE_GLFW AND NOT SDL2)
+-        set(USE_GLFW ON)
++    if (NINTENDO_SWITCH2)
++        message(STATUS "building for SWITCH 2 (libounce + OunceVK)")
++        set(USE_GLFW OFF CACHE BOOL "Disable GLFW on Switch 2" FORCE)
++        set(USE_SDL2 OFF CACHE BOOL "Disable SDL2 on Switch 2" FORCE)
++        set(USE_DEKO3D OFF CACHE BOOL "Disable Deko3D on Switch 2" FORCE)
++        set(USE_GLES3 ON CACHE BOOL "Use OpenGL ES 3 on Switch 2" FORCE)
++        set(CMAKE_TOOLCHAIN_FILE "${DEVKITPRO}/libounce/cmake/Switch2.cmake" CACHE FILEPATH "Switch 2 toolchain" FORCE)
++        include(${DEVKITPRO}/libounce/cmake/Switch2.cmake REQUIRED)
++    else ()
++        set(CMAKE_C_FLAGS "-I${DEVKITPRO}/libnx/include -I${DEVKITPRO}/portlibs/switch/include")
++        set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
++        include(${DEVKITPRO}/cmake/Switch.cmake REQUIRED)
++        if (NOT USE_GLFW AND NOT SDL2)
++            set(USE_GLFW ON)
++        endif ()
+     endif ()
+ else()
+     message(FATAL_ERROR "Please set build target. Example: -DPLATFORM_DESKTOP=ON or -DPLATFORM_SWITCH=ON")
+diff --git a/library/include/borealis/platforms/switch/switch_platform.hpp b/library/include/borealis/platforms/switch/switch_platform.hpp
+index bd6841c4..1ff8a761 100644
+--- a/library/include/borealis/platforms/switch/switch_platform.hpp
++++ b/library/include/borealis/platforms/switch/switch_platform.hpp
+@@ -16,7 +16,7 @@
+ 
+ #pragma once
+ 
+-#ifdef BOREALIS_USE_DEKO3D
++#if defined(BOREALIS_USE_DEKO3D) || defined(__SWITCH2__)
+ #include <borealis/platforms/switch/switch_video.hpp>
+ #elif defined(__SDL2__)
+ #include <borealis/platforms/sdl/sdl_video.hpp>
+@@ -81,7 +81,7 @@ class SwitchPlatform : public Platform
+     SwitchInputManager* inputManager;
+     SwitchImeManager* imeManager;
+ 
+-#ifdef BOREALIS_USE_DEKO3D
++#if defined(BOREALIS_USE_DEKO3D) || defined(__SWITCH2__)
+     SwitchVideoContext* videoContext;
+ #elif defined(__SDL2__)
+     SDLVideoContext* videoContext;
+diff --git a/library/include/borealis/platforms/switch/switch_video.hpp b/library/include/borealis/platforms/switch/switch_video.hpp
+index be69040e..9d60cc4f 100644
+--- a/library/include/borealis/platforms/switch/switch_video.hpp
++++ b/library/include/borealis/platforms/switch/switch_video.hpp
+@@ -18,6 +18,55 @@ limitations under the License.
+ 
+ #pragma once
+ 
++#ifdef __SWITCH2__
++
++#include <EGL/egl.h>
++#include <switch.h>
++
++#include <borealis/core/video.hpp>
++
++typedef Event _LibNXEvent; // "Event" alone clashes with brls::Event
++
++namespace brls
++{
++
++// Switch 2 EGL + OpenGL ES 3.0 (OunceVK) video context
++class SwitchVideoContext : public VideoContext
++{
++  public:
++    SwitchVideoContext();
++    ~SwitchVideoContext() override;
++
++    void clear(NVGcolor color) override;
++    void resetState() override;
++    void beginFrame() override;
++    void endFrame() override;
++    void setSwapInterval(int interval) override;
++    double getScaleFactor() override;
++    NVGcontext* getNVGContext() override;
++
++    void appletCallback(AppletHookType hookType);
++
++  private:
++    _LibNXEvent defaultDisplayResolutionChangeEvent {};
++    bool displayResolutionChangeEventReady = true;
++
++    void resetFramebuffer();
++    void updateWindowSize();
++
++    float framebufferWidth  = 1280.0f;
++    float framebufferHeight = 720.0f;
++
++    EGLDisplay eglDisplay  = EGL_NO_DISPLAY;
++    EGLContext eglContext  = EGL_NO_CONTEXT;
++    EGLSurface eglSurface  = EGL_NO_SURFACE;
++    NVGcontext* nvgContext = nullptr;
++};
++
++} // namespace brls
++
++#else // !__SWITCH2__
++
+ #include <nanovg/framework/CMemPool.h>
+ #include <switch.h>
+ 
+@@ -105,3 +154,5 @@ class SwitchVideoContext : public VideoContext
+ };
+ 
+ } // namespace brls
++
++#endif // !__SWITCH2__
+diff --git a/library/lib/platforms/switch/switch_platform.cpp b/library/lib/platforms/switch/switch_platform.cpp
+index 208b4ca8..2c897c77 100644
+--- a/library/lib/platforms/switch/switch_platform.cpp
++++ b/library/lib/platforms/switch/switch_platform.cpp
+@@ -54,7 +54,7 @@ static void on_applet_hook(AppletHookType hook, void* arg)
+                     break;
+             }
+             break;
+-#ifdef BOREALIS_USE_DEKO3D
++#if defined(BOREALIS_USE_DEKO3D) || defined(__SWITCH2__)
+         case AppletHookType_OnOperationMode:
+             ((SwitchVideoContext*)platform->getVideoContext())->appletCallback(hook);
+             break;
+@@ -114,7 +114,7 @@ SwitchPlatform::SwitchPlatform()
+ 
+ void SwitchPlatform::createWindow(std::string windowTitle, uint32_t windowWidth, uint32_t windowHeight, float windowXPos, float windowYPos)
+ {
+-#ifdef BOREALIS_USE_DEKO3D
++#if defined(BOREALIS_USE_DEKO3D) || defined(__SWITCH2__)
+     this->videoContext = new SwitchVideoContext();
+ #elif defined(__SDL2__)
+     this->videoContext = new SDLVideoContext(windowTitle, windowWidth, windowHeight, 0, 0);
+diff --git a/library/lib/platforms/switch/switch_video.cpp b/library/lib/platforms/switch/switch_video.cpp
+index 7729f007..a13c52c3 100644
+--- a/library/lib/platforms/switch/switch_video.cpp
++++ b/library/lib/platforms/switch/switch_video.cpp
+@@ -19,6 +19,215 @@ limitations under the License.
+ #include <borealis/core/application.hpp>
+ #include <borealis/platforms/switch/switch_video.hpp>
+ 
++#ifdef __SWITCH2__
++
++#include <GLES3/gl3.h>
++#define NANOVG_GLES3_IMPLEMENTATION
++#include <nanovg_gl.h>
++#include <cmath>
++
++#define HANDHELD_WIDTH 1280.0f
++#define HANDHELD_HEIGHT 720.0f
++
++#define DOCKED_WIDTH 1920.f
++#define DOCKED_HEIGHT 1080.f
++
++namespace brls
++{
++
++SwitchVideoContext::SwitchVideoContext()
++{
++    Result rc = appletGetDefaultDisplayResolutionChangeEvent(&this->defaultDisplayResolutionChangeEvent);
++    if (R_FAILED(rc))
++    {
++        Logger::warning(fmt::runtime("switch2: failed to get display resolution change event ({:#x}), falling back to operation mode"), rc);
++        this->displayResolutionChangeEventReady = false;
++    }
++
++    this->updateWindowSize();
++
++    this->eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
++    if (this->eglDisplay == EGL_NO_DISPLAY || !eglInitialize(this->eglDisplay, nullptr, nullptr))
++    {
++        fatal(fmt::format("switch2: eglInitialize failed (0x{:x})", eglGetError()));
++    }
++
++    eglBindAPI(EGL_OPENGL_ES_API);
++
++    const EGLint configAttributes[] = {
++        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
++        EGL_RED_SIZE, 8,
++        EGL_GREEN_SIZE, 8,
++        EGL_BLUE_SIZE, 8,
++        EGL_ALPHA_SIZE, 8,
++        EGL_DEPTH_SIZE, 24,
++        EGL_STENCIL_SIZE, 8,
++        EGL_NONE,
++    };
++    EGLConfig config = nullptr;
++    EGLint configCount = 0;
++    if (!eglChooseConfig(this->eglDisplay, configAttributes, &config, 1, &configCount) || configCount == 0)
++    {
++        fatal(fmt::format("switch2: eglChooseConfig failed (0x{:x})", eglGetError()));
++    }
++
++    this->eglSurface = eglCreateWindowSurface(this->eglDisplay, config, nwindowGetDefault(), nullptr);
++    if (this->eglSurface == EGL_NO_SURFACE)
++    {
++        fatal(fmt::format("switch2: eglCreateWindowSurface failed (0x{:x})", eglGetError()));
++    }
++
++    const EGLint contextAttributes[] = {
++        EGL_CONTEXT_MAJOR_VERSION, 3,
++        EGL_NONE,
++    };
++    this->eglContext = eglCreateContext(this->eglDisplay, config, EGL_NO_CONTEXT, contextAttributes);
++    if (this->eglContext == EGL_NO_CONTEXT)
++    {
++        fatal(fmt::format("switch2: eglCreateContext failed (0x{:x})", eglGetError()));
++    }
++
++    if (!eglMakeCurrent(this->eglDisplay, this->eglSurface, this->eglSurface, this->eglContext))
++    {
++        fatal(fmt::format("switch2: eglMakeCurrent failed (0x{:x})", eglGetError()));
++    }
++
++    Logger::info("switch2: GL Vendor: {}", reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
++    Logger::info("switch2: GL Renderer: {}", reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
++    Logger::info("switch2: GL Version: {}", reinterpret_cast<const char*>(glGetString(GL_VERSION)));
++
++    this->nvgContext = nvgCreateGLES3(NVG_STENCIL_STROKES | NVG_ANTIALIAS);
++    if (!this->nvgContext)
++    {
++        fatal("switch2: nvgCreateGLES3 failed");
++    }
++
++    glViewport(0, 0, static_cast<GLsizei>(this->framebufferWidth), static_cast<GLsizei>(this->framebufferHeight));
++    Application::setWindowSize(roundf(this->framebufferWidth), roundf(this->framebufferHeight));
++    setSwapInterval(VideoContext::swapInterval);
++}
++
++void SwitchVideoContext::updateWindowSize()
++{
++    int32_t width = 0, height = 0;
++    Result rc = appletGetDefaultDisplayResolution(&width, &height);
++    if (R_SUCCEEDED(rc) && width > 0 && height > 0)
++    {
++        this->framebufferWidth  = static_cast<float>(width);
++        this->framebufferHeight = static_cast<float>(height);
++    }
++    else
++    {
++        switch (appletGetOperationMode())
++        {
++            case AppletOperationMode_Handheld:
++                this->framebufferWidth  = HANDHELD_WIDTH;
++                this->framebufferHeight = HANDHELD_HEIGHT;
++                break;
++            case AppletOperationMode_Console:
++                this->framebufferWidth  = DOCKED_WIDTH;
++                this->framebufferHeight = DOCKED_HEIGHT;
++                break;
++            default:
++                return;
++        }
++    }
++
++    nwindowSetDimensions(nwindowGetDefault(),
++        static_cast<u32>(roundf(this->framebufferWidth)),
++        static_cast<u32>(roundf(this->framebufferHeight)));
++
++    if (this->eglContext != EGL_NO_CONTEXT)
++    {
++        glViewport(0, 0,
++            static_cast<GLsizei>(roundf(this->framebufferWidth)),
++            static_cast<GLsizei>(roundf(this->framebufferHeight)));
++    }
++
++    Application::onWindowResized(roundf(this->framebufferWidth), roundf(this->framebufferHeight));
++}
++
++void SwitchVideoContext::clear(NVGcolor color)
++{
++    glClearColor(color.r, color.g, color.b, 1.0f);
++    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
++}
++
++void SwitchVideoContext::resetState()
++{
++    glDisable(GL_CULL_FACE);
++    glDisable(GL_BLEND);
++    glDisable(GL_DEPTH_TEST);
++    glDisable(GL_SCISSOR_TEST);
++    glDisable(GL_STENCIL_TEST);
++}
++
++void SwitchVideoContext::resetFramebuffer()
++{
++    Logger::info("switch2: resetFramebuffer");
++    this->updateWindowSize();
++}
++
++void SwitchVideoContext::beginFrame()
++{
++    if (this->displayResolutionChangeEventReady &&
++        R_SUCCEEDED(eventWait(&this->defaultDisplayResolutionChangeEvent, 0)))
++    {
++        this->resetFramebuffer();
++    }
++}
++
++void SwitchVideoContext::endFrame()
++{
++    eglSwapBuffers(this->eglDisplay, this->eglSurface);
++}
++
++void SwitchVideoContext::setSwapInterval(int interval)
++{
++    VideoContext::swapInterval = interval;
++    if (this->eglDisplay != EGL_NO_DISPLAY)
++        eglSwapInterval(this->eglDisplay, interval);
++}
++
++void SwitchVideoContext::appletCallback(AppletHookType hookType)
++{
++    if (hookType == AppletHookType_OnOperationMode && !this->displayResolutionChangeEventReady)
++        resetFramebuffer();
++}
++
++NVGcontext* SwitchVideoContext::getNVGContext()
++{
++    return this->nvgContext;
++}
++
++SwitchVideoContext::~SwitchVideoContext()
++{
++    if (this->nvgContext)
++    {
++        nvgDeleteGLES3(this->nvgContext);
++        this->nvgContext = nullptr;
++    }
++    if (this->eglDisplay != EGL_NO_DISPLAY)
++    {
++        eglMakeCurrent(this->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++        if (this->eglContext != EGL_NO_CONTEXT)
++            eglDestroyContext(this->eglDisplay, this->eglContext);
++        if (this->eglSurface != EGL_NO_SURFACE)
++            eglDestroySurface(this->eglDisplay, this->eglSurface);
++        eglTerminate(this->eglDisplay);
++        this->eglDisplay = EGL_NO_DISPLAY;
++    }
++}
++
++double SwitchVideoContext::getScaleFactor()
++{
++    return 1.0;
++}
++
++} // namespace brls
++
++#else // !__SWITCH2__
++
+ // nanovg implementation
+ #include <nanovg_dk.h>
+ 
+@@ -330,3 +539,5 @@ void SwitchVideoContext::queueFlush()
+ }
+ 
+ } // namespace brls
++
++#endif // !__SWITCH2__
+diff --git a/library/lib/core/thread.cpp b/library/lib/core/thread.cpp
+--- a/library/lib/core/thread.cpp
++++ b/library/lib/core/thread.cpp
+@@ -201,7 +201,18 @@ void* Threading::task_loop(void* a)
+ 
+         for (auto task : m_tasks_copy)
+         {
+-            task();
++            try
++            {
++                task();
++            }
++            catch (const std::exception& e)
++            {
++                brls::Logger::error("error: async task: {}", e.what());
++            }
++            catch (...)
++            {
++                brls::Logger::error("error: async task: unknown exception");
++            }
+         }
+ 
+         retro_sleep(500);
+@@ -214,7 +225,11 @@ void Threading::start_task_loop()
+ #ifdef BOREALIS_USE_STD_THREAD
+     task_loop_thread = new std::thread(std_task_loop);
+ #else
+-    pthread_create(&task_loop_thread, NULL, task_loop, NULL);
++    pthread_attr_t attr;
++    pthread_attr_init(&attr);
++    pthread_attr_setstacksize(&attr, 2 * 1024 * 1024);
++    pthread_create(&task_loop_thread, &attr, task_loop, NULL);
++    pthread_attr_destroy(&attr);
+ #endif
+ }
+ 
+

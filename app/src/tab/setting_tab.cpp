@@ -50,6 +50,8 @@ public:
             "Deko3D"
 #elif defined(BOREALIS_USE_GXM)
             "GXM"
+#elif defined(__SWITCH2__)
+            "OunceVK / GLES3"
 #else
             "OpenGL"
 #endif
@@ -103,7 +105,7 @@ void SettingTab::onCreate() {
     auto& conf = AppConfig::instance();
 
 /// Hardware decode
-#ifdef __SWITCH__
+#if defined(__SWITCH__) && !defined(__SWITCH2__)
     btnOverClock->init(
         "main/setting/others/overclock"_i18n, conf.getItem(AppConfig::OVERCLOCK, false), [&conf](bool value) {
             SwitchSys::setClock(value);

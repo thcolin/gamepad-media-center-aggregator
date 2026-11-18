@@ -17,6 +17,11 @@ cmake_dependent_option(CMAKE_INSTALL "Install to system path" OFF "UNIX;NOT APPL
 # NintendoSwitch
 cmake_dependent_option(BUILTIN_NSP "Built in NSP forwarder" OFF "PLATFORM_SWITCH" OFF)
 cmake_dependent_option(USE_LIBUSBHSFS "Use libusbhsfs for ums access" OFF "PLATFORM_SWITCH" OFF)
+if (NINTENDO_SWITCH2)
+    set(BUILTIN_NSP OFF CACHE BOOL "Disable Switch 1 NSP forwarder on Switch 2" FORCE)
+    set(USE_LIBUSBHSFS OFF CACHE BOOL "Disable Switch 1 libusbhsfs on Switch 2" FORCE)
+    list(APPEND APP_PLATFORM_OPTION -D__SWITCH2__ -DUSE_GLES3)
+endif ()
 
 # mpv related
 # If your system does not support OpenGL(ES), you can use software rendering, but it will affect performance.
@@ -63,6 +68,11 @@ set(VERSION_ALTER "0")
 # name/icon. (hacbrewpack lower-cases the filename → see forwarder/CMakeLists.txt.)
 set(PROJECT_TITLEID "0500474D43410000")
 set(PROJECT_AUTHOR "thcolin")
+if (NINTENDO_SWITCH2)
+    set(GMCA_NRO_NAME "${PROJECT_NAME}-switch2.nro")
+else ()
+    set(GMCA_NRO_NAME "${PROJECT_NAME}.nro")
+endif ()
 set(PACKAGE_NAME "fun.thcolin.gmca")
 set(VITA_TITLEID "GMCA00001")
 set(PSN_TITLE_ID "GMCA00000")
@@ -153,6 +163,10 @@ endif ()
 
 # build borealis and other third party libraries
 add_subdirectory(library)
+if (NINTENDO_SWITCH2)
+    target_include_directories(borealis BEFORE PUBLIC
+        ${BOREALIS_LIBRARY}/include/borealis/extern/tinyxml2)
+endif ()
 # yoga builds with -fno-rtti, so it emits its own hidden std::exception typeinfo, which
 # the link then uses for every catch in the app: libc++ exceptions such as
 # std::runtime_error no longer matched catch (const std::exception&)
@@ -231,8 +245,39 @@ else ()
     find_package(PkgConfig REQUIRED)
 
     pkg_search_module(MPV REQUIRED mpv)
+    set(SWITCH2_FFMPEG_DIR "" CACHE PATH "Clean Switch 2 FFmpeg prefix")
+    if (NINTENDO_SWITCH2)
+        if (SWITCH2_FFMPEG_DIR)
+            list(APPEND APP_PLATFORM_INCLUDE ${SWITCH2_FFMPEG_DIR}/include)
+            set(CMAKE_EXE_LINKER_FLAGS "-L${SWITCH2_FFMPEG_DIR}/lib ${CMAKE_EXE_LINKER_FLAGS}")
+            set(_FILTERED_MPV_LIBS)
+            foreach (_lib IN LISTS MPV_LIBRARIES)
+                if (_lib MATCHES "^(avfilter|avformat|avcodec|swscale|swresample|avutil)$")
+                    list(APPEND _FILTERED_MPV_LIBS "${SWITCH2_FFMPEG_DIR}/lib/lib${_lib}.a")
+                else ()
+                    list(APPEND _FILTERED_MPV_LIBS "${_lib}")
+                endif ()
+            endforeach ()
+            set(MPV_LIBRARIES ${_FILTERED_MPV_LIBS})
+        endif ()
+        list(APPEND APP_PLATFORM_INCLUDE ${DEVKITPRO}/portlibs/switch2/include)
+    endif ()
     list(APPEND APP_PLATFORM_INCLUDE ${MPV_INCLUDE_DIRS})
     list(APPEND APP_PLATFORM_LIB ${MPV_LIBRARIES})
+    if (NINTENDO_SWITCH2)
+        if (SWITCH2_FFMPEG_DIR)
+            list(APPEND APP_PLATFORM_LIB
+                ${SWITCH2_FFMPEG_DIR}/lib/libavfilter.a
+                ${SWITCH2_FFMPEG_DIR}/lib/libavformat.a
+                ${SWITCH2_FFMPEG_DIR}/lib/libavcodec.a
+                ${SWITCH2_FFMPEG_DIR}/lib/libswscale.a
+                ${SWITCH2_FFMPEG_DIR}/lib/libswresample.a
+                ${SWITCH2_FFMPEG_DIR}/lib/libavutil.a
+            )
+            link_directories(${SWITCH2_FFMPEG_DIR}/lib)
+        endif ()
+        link_directories(${DEVKITPRO}/portlibs/switch2/lib)
+    endif ()
     link_directories(${MPV_LIBRARY_DIRS})
 
     pkg_search_module(LIBWEBP QUIET libwebp)
@@ -264,6 +309,17 @@ endif ()
 program_target(${PROJECT_NAME} "${MAIN_SRC}")
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 target_include_directories(${PROJECT_NAME} PRIVATE app/include ${APP_PLATFORM_INCLUDE})
+if (NINTENDO_SWITCH2)
+    if (SWITCH2_FFMPEG_DIR)
+        target_include_directories(${PROJECT_NAME} BEFORE PRIVATE ${SWITCH2_FFMPEG_DIR}/include)
+        target_link_directories(${PROJECT_NAME} BEFORE PRIVATE
+            ${SWITCH2_FFMPEG_DIR}/lib
+            ${DEVKITPRO}/portlibs/switch2/lib)
+    else ()
+        target_link_directories(${PROJECT_NAME} BEFORE PRIVATE ${DEVKITPRO}/portlibs/switch2/lib)
+    endif ()
+    target_link_options(${PROJECT_NAME} PRIVATE -Wl,-Map=${CMAKE_BINARY_DIR}/${PROJECT_NAME}-switch2.map)
+endif ()
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections -Wunused-variable ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis lunasvg ${APP_PLATFORM_LIB})
 if (PLATFORM_PS4)
@@ -332,7 +388,7 @@ elseif (PLATFORM_SWITCH)
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
         COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/resources/font/keymap*.ttf ${CMAKE_BINARY_DIR}/resources/font/*_fallback.ttf ${CMAKE_BINARY_DIR}/resources/font/switch_font.ttf
-        COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
+        COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${GMCA_NRO_NAME} --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
 elseif (PLATFORM_PSV)
     set(VITA_MKSFOEX_FLAGS "${VITA_MKSFOEX_FLAGS} -d ATTRIBUTE2=12") # max heap size mode

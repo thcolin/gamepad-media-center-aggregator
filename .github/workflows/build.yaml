@@ -23,6 +23,7 @@ on:
         - mingw64
         - macos
         - nx
+        - nx2
         - psvita
         - ps4
         - flatpak
@@ -39,7 +40,7 @@ env:
 
 jobs:
   upload-release:
-    needs: [ build-mingw, build-nx, build-macos, build-flatpak, build-aur, build-ps4, build-vita, build-android ]
+    needs: [ build-mingw, build-nx, build-nx2, build-macos, build-flatpak, build-aur, build-ps4, build-vita, build-android ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -92,6 +93,7 @@ jobs:
           assets/GMCA-windows-*.7z
           assets/GMCA-macOS-*/*.dmg
           assets/GMCA-NintendoSwitch-deko3d-*/*.nro
+          assets/GMCA-NintendoSwitch2-*/*.nro
           assets/GMCA-PS4-*/*.pkg
           assets/GMCA-Vita-*/*.vpk
           assets/GMCA-Flatpak-*/*.flatpak
@@ -153,6 +155,49 @@ jobs:
       with:
         name: ns-dev-elf-${{ matrix.driver }}-${{ github.run_number }}
         path: build/GMCA.elf
+
+  build-nx2:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.platform == 'nx2' || github.event_name != 'workflow_dispatch' }}
+    container:
+      image: devkitpro/devkita64:20260219
+    defaults:
+      run:
+        shell: bash
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: recursive
+    - name: Configure git safe.directory
+      run: git config --global --add safe.directory '*'
+    - name: Install Switch portlibs and ounce-devkit (20261115b)
+      run: |
+        for attempt in 1 2 3 4 5; do
+          if dkp-pacman -Sy --noconfirm --needed switch-dev switch-portlibs switch-libmpv switch-ffmpeg switch-curl switch-libwebp switch-glfw switch-mesa; then
+            break
+          fi
+          echo "dkp-pacman attempt $attempt failed; retrying in $((attempt * 10))s..."
+          sleep $((attempt * 10))
+        done
+        sdk="$(mktemp -d)"
+        git clone https://github.com/ouncebrew/ounce-devkit.git "$sdk"
+        git -C "$sdk" checkout 0f38ba80d7ee768c5749278f127749d14ece2036
+        bash "$sdk/install.sh" "20261115b"
+        rm -rf "$sdk"
+    - name: Cache Switch 2 FFmpeg 7.1 (--disable-nvtegra)
+      uses: actions/cache@v4
+      with:
+        path: build/switch2/ffmpeg-install
+        key: gmca-switch2-ffmpeg-7.1-v2-${{ hashFiles('scripts/build-switch2.sh') }}
+    - name: Build and verify Switch 2 NRO
+      env:
+        GMCA_VERSION_BUILD: ${{ github.run_number }}
+      run: bash scripts/build-switch2.sh
+    - name: Upload nro
+      uses: actions/upload-artifact@v6
+      with:
+        name: GMCA-NintendoSwitch2-${{ github.run_number }}
+        path: build/switch2/GMCA-switch2.nro
 
   build-ps4:
     runs-on: ubuntu-latest
