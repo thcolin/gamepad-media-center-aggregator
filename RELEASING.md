@@ -46,7 +46,11 @@ fails the build instead of shipping a broken release:
 
 6. **Watch the build** — the tag run is the one whose ref is `vX.Y.Z`. When
    `upload-release` succeeds, the GitHub release is published and the AUR
-   `pkgver` is derived automatically from the tag. Nothing else to do.
+   `pkgver` is derived automatically from the tag. Then check that the release
+   carries `GMCA-switch2.nro.zip`: `build-nx2` runs with `continue-on-error`, so
+   a Switch 2 failure does not stop the release, and the guide links to
+   `releases/latest/download/GMCA-switch2.nro.zip`. If the zip is missing,
+   re-run `build-nx2` and attach its zipped NRO to the release by hand.
 
 ## Store listings
 

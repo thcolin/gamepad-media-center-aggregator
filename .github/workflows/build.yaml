@@ -90,8 +90,9 @@ jobs:
         name: GMCA ${{ github.ref_name }}
         tag_name: ${{ github.ref_name }}
         body_path: RELEASE_NOTES.md
-        # direct publication: the job only runs after ALL builds succeed,
-        # and the tag/changelog are validated upstream — as soon as the
+        # direct publication: the job only runs after every build succeeds,
+        # except build-nx2 (continue-on-error: a release can lack the Switch 2
+        # zip, see RELEASING.md), and the tag/changelog are validated upstream — as soon as the
         # release exists, the in-app updater sees it (releases/latest ignores drafts)
         draft: false
         files: |
