@@ -251,3 +251,4 @@ GMCA stands on the shoulders of the homebrew and open-source community:
 - [@devkitPro](https://github.com/devkitPro) and switchbrew for [libnx](https://github.com/switchbrew/libnx)
 - [@proconsule](https://github.com/proconsule) for [nxmp](https://github.com/proconsule/nxmp)
 - [@averne](https://github.com/averne) for the [FFmpeg](https://github.com/averne/FFmpeg) hwaccel backend and the deko3d backend of mpv
+- [@davidkalil10](https://github.com/davidkalil10) for the Nintendo Switch 2 port
