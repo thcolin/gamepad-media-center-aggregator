@@ -418,9 +418,11 @@ html:not(.js) .nav { transform: none; }
    of the four PlayStation face-button colours; desktop has no hero pair, so it
    keeps its single Stremio accent until one is chosen. */
 .device[data-b="switch"]   { --dc1: #00c3e3; --dc2: #ff4554; } /* Nintendo blue · Switch red */
+.device[data-b="switch2"]  { --dc1: #8fe3ef; --dc2: #ff7a5c; } /* Joy-Con 2 stick glow cyan · coral */
 /* vita tagline (Pocket = PS gunmetal · OLED lettered in the four PS colours) is coloured inline in the HTML */
 .device[data-b="pi"]       { --dc1: #ff5a9e; --dc2: #6cc04a; } /* Raspberry pink · Pi green */
 .device[data-b="desktop"]  { --dc1: #0a84ff; --dc2: #b8bcc4; } /* Windows blue · Apple silver */
+.device:last-child:nth-child(odd) { grid-column: 1 / -1; }
 @media (max-width: 720px) { .devices { grid-template-columns: 1fr; } }
 
 /* ============ Features ============ */
