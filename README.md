@@ -128,7 +128,7 @@ artifacts on [nightly.link](https://nightly.link/thcolin/gamepad-media-center-ag
 > Video playback needs full-memory mode. Applet mode is fine for browsing, but install
 > the HOME tile (or use title takeover) before starting a movie.
 
-**Nintendo Switch 2** — unzip `GMCA-switch2.nro.zip`, copy `GMCA-switch2.nro` to `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`. The in-app updater does not replace the Switch 2 build: update it by hand the same way.
+**Nintendo Switch 2** — unzip `GMCA-switch2.nro.zip`, copy `GMCA-switch2.nro` to `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`.
 
 **PS Vita** — install `GMCA.vpk` with VitaShell, or find GMCA on VitaDB. **Raspberry Pi / desktop** —
 grab the Flatpak or the desktop package from the latest release.

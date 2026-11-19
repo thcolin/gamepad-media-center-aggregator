@@ -2,6 +2,9 @@
 #ifdef __SWITCH__
 #include <switch.h>
 #include <filesystem>
+#ifdef __SWITCH2__
+#include "miniz.h"
+#endif
 #elif defined(__PSV__)
 #include <psp2/vshbridge.h>
 #include <psp2/io/fcntl.h>
@@ -134,6 +137,28 @@ bool AppVersion::needUpdate(std::string latestVersion) {
 }
 
 #ifdef __SWITCH__
+#ifdef __SWITCH2__
+/// Extracts the single .nro of the release zip to `nro`. miniz checks the
+/// CRC of the entry, so a corrupted archive never reaches the install.
+static void extractNro(const std::string& zip_path, const std::string& nro) {
+    mz_zip_archive zip{};
+    if (!mz_zip_reader_init_file(&zip, zip_path.c_str(), 0)) throw std::runtime_error("invalid update archive");
+    int index = -1;
+    for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&zip); i++) {
+        char name[256];
+        mz_zip_reader_get_filename(&zip, i, name, sizeof(name));
+        std::string n = name;
+        if (n.size() > 4 && n.compare(n.size() - 4, 4, ".nro") == 0 && n.find('/') == std::string::npos) {
+            index = static_cast<int>(i);
+            break;
+        }
+    }
+    bool ok = index >= 0 && mz_zip_reader_extract_to_file(&zip, index, nro.c_str(), 0);
+    mz_zip_reader_end(&zip);
+    if (!ok) throw std::runtime_error("no .nro in the update archive");
+}
+#endif
+
 /// Downloads the release NRO into a temporary file in configDir, verifies
 /// its size, then replaces the running NRO (real path provided by
 /// hbloader/the forwarder via argv[0], cf. AppVersion::nro_path).
@@ -171,6 +196,9 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
         std::string conf_dir = AppConfig::instance().configDir();
         std::string pkg_name = AppVersion::getPackageName();
         std::string path = fmt::format("{}/{}_{}.nro", conf_dir, pkg_name, latest_ver);
+#ifdef __SWITCH2__
+        std::string zip_path = path + ".zip";
+#endif
 
         auto finish = [dialog, dismissed](std::function<void()> then) {
             brls::sync([dialog, dismissed, then]() {
@@ -194,12 +222,21 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
         };
 
         try {
+#ifdef __SWITCH2__
+            HTTP::download(url, zip_path, HTTP::Timeout{-1}, AppVersion::updating, progress);
+            auto actual = std::filesystem::file_size(zip_path);
+#else
             HTTP::download(url, path, HTTP::Timeout{-1}, AppVersion::updating, progress);
+            auto actual = std::filesystem::file_size(path);
+#endif
 
             // size verified BEFORE overwriting the running NRO
-            auto actual = std::filesystem::file_size(path);
             if (size > 0 && actual != static_cast<std::uintmax_t>(size))
                 throw std::runtime_error(fmt::format("incomplete download ({}/{} bytes)", actual, size));
+#ifdef __SWITCH2__
+            extractNro(zip_path, path);
+            std::filesystem::remove(zip_path);
+#endif
 
             // the romfs is mapped from the NRO file: unmount before replacing it
             romfsExit();
@@ -211,6 +248,9 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
             finish([]() { Dialog::quitApp(true, "main/setting/others/updated"_i18n); });
         } catch (const std::exception& ex) {
             std::filesystem::remove(path);
+#ifdef __SWITCH2__
+            std::filesystem::remove(zip_path);
+#endif
             bool canceled = AppVersion::updating->load();
             AppVersion::updating->store(true);
             if (canceled) return;  // user cancellation, not a failure
@@ -358,20 +398,15 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
             // release notes shown in the popup (only this version's changelog)
             std::string release_body = j.value("body", std::string());
 
-#if defined(__SWITCH2__)
-            // the Switch 2 build ships as GMCA-switch2.nro.zip, installed by hand
-            brls::Logger::info("checkUpdate: {} available, install GMCA-switch2.nro.zip by hand", latest_ver);
-            if (showUpToDateDialog)
-                brls::sync([latest_ver]() { Dialog::show(brls::getStr("main/setting/others/upgrade_manual", latest_ver)); });
-            return;
-#endif
-
 #if defined(__SWITCH__) || defined(__PSV__)
             // Installable asset URL and size from the API response rather than a
             // hardcoded URL: robust to an asset rename, and the size lets us
             // validate the download before installing. Switch ships an .nro,
-            // Vita a .vpk.
-#ifdef __SWITCH__
+            // Switch 2 a zipped .nro (Switch 1 updaters up to v1.4.0 take the
+            // first .nro of the release), Vita a .vpk.
+#if defined(__SWITCH2__)
+            const std::string asset_ext = ".nro.zip";
+#elif defined(__SWITCH__)
             const std::string asset_ext = ".nro";
 #else
             const std::string asset_ext = ".vpk";
@@ -386,7 +421,13 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
                     name.compare(name.size() - asset_ext.size(), asset_ext.size(), asset_ext) == 0) {
                     std::string u = asset.at("browser_download_url").get<std::string>();
                     int64_t sz = asset.value("size", int64_t(0));
-#if defined(__SWITCH__)
+#if defined(__SWITCH2__)
+                    if (name.find("switch2") != std::string::npos) {
+                        asset_url = u;
+                        asset_size = sz;
+                        break;
+                    }
+#elif defined(__SWITCH__)
                     if (name.find("switch1") != std::string::npos || name == "GMCA.nro") {
                         asset_url = u;
                         asset_size = sz;

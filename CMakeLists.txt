@@ -103,6 +103,12 @@ file(GLOB_RECURSE MAIN_SRC "${PROJECT_SOURCE_DIR}/app/src/*.cpp")
 if (PLATFORM_SWITCH)
     # System service initialization functions required for libnx
     list(APPEND MAIN_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
+    if (NINTENDO_SWITCH2)
+        # the in-app update extracts the release's GMCA-switch2.nro.zip (version.cpp)
+        list(APPEND MAIN_SRC ${CMAKE_SOURCE_DIR}/library/miniz/miniz.c)
+        list(APPEND APP_PLATFORM_INCLUDE ${CMAKE_SOURCE_DIR}/library/miniz)
+        list(APPEND APP_PLATFORM_OPTION -DMINIZ_NO_TIME)
+    endif ()
 elseif (PLATFORM_PS4)
     # Static-init guards that work with the PS4's thread ids, see the file
     list(APPEND MAIN_SRC ${CMAKE_SOURCE_DIR}/app/platform/ps4/cxa_guard.c)
