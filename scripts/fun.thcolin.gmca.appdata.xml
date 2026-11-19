@@ -14,7 +14,7 @@
         <content_attribute id="social-info">mild</content_attribute>
     </content_rating>
     <description>
-        <p>Gamepad Media Center Aggregator (GMCA) is a native, controller-first client that brings your media servers to the devices their official apps ignore — Nintendo Switch, PS Vita and Linux / Raspberry Pi on a TV.</p>
+        <p>Gamepad Media Center Aggregator (GMCA) is a native, controller-first client that brings your media servers to the devices their official apps ignore — Nintendo Switch and Switch 2, PS Vita and Linux / Raspberry Pi on a TV.</p>
         <p>One identical interface for every backend:</p>
         <ul>
             <li>Connect to Plex, Jellyfin, Emby or Stremio</li>

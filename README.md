@@ -10,13 +10,13 @@
 
 GMCA is one native, controller-first **client**. Point it at any **media center** —
 **Plex, Jellyfin, Emby or Stremio** — and run it on any **device** you left in a drawer:
-**Nintendo Switch**, **Nintendo Switch 2**, **PS Vita** or a **Raspberry Pi wired to the TV**.
+**Nintendo Switch**, **Nintendo Switch 2** (beta), **PS Vita** or a **Raspberry Pi wired to the TV**.
 The interface never changes; only the accent colour and the tabs follow your server. Also runs on
 Windows, macOS, Linux and PS4.
 
 [![build](https://github.com/thcolin/gamepad-media-center-aggregator/actions/workflows/build.yaml/badge.svg)](https://github.com/thcolin/gamepad-media-center-aggregator/actions/workflows/build.yaml)
 [![NS](https://img.shields.io/badge/-Nintendo%20Switch-e4000f?style=flat&logo=Nintendo%20Switch)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
-[![NS2](https://img.shields.io/badge/-Nintendo%20Switch%202-e4000f?style=flat&logo=Nintendo%20Switch)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
+[![NS2](https://img.shields.io/badge/Nintendo%20Switch%202-beta-e4000f?style=flat&logo=Nintendo%20Switch)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![PSVita](https://img.shields.io/badge/-PSVita-003791?style=flat&logo=PlayStation)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![download](https://img.shields.io/github/downloads/thcolin/gamepad-media-center-aggregator/total?label=downloads)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![nightly](https://img.shields.io/badge/nightly-build-green)](https://nightly.link/thcolin/gamepad-media-center-aggregator/workflows/build.yaml/dev)
@@ -83,7 +83,7 @@ have them. Keep every server and profile side by side and hop between them from 
 
 - **Nintendo Switch** — native NRO on Atmosphère CFW; HOME-menu tile for full-memory playback;
   external USB drives via [libusbhsfs](https://github.com/DarkMatterCore/libusbhsfs).
-- **Nintendo Switch 2** — native NRO via [ounce-devkit](https://github.com/ouncebrew/ounce-devkit) (`libounce` + `OunceVK` EGL/GLES3).
+- **Nintendo Switch 2** (beta) — native NRO via [ounce-devkit](https://github.com/ouncebrew/ounce-devkit) (`libounce` + `OunceVK` EGL/GLES3).
 - **PS Vita** — a first-class VPK for jailbroken consoles (on [VitaDB](https://www.rinnegatamante.eu/vitadb/));
   that OLED finally earns its keep again.
 - **Raspberry Pi on the TV** — a Flatpak (x86_64 / arm64v8) and an Arch package; a Pi wired to the
@@ -128,7 +128,11 @@ artifacts on [nightly.link](https://nightly.link/thcolin/gamepad-media-center-ag
 > Video playback needs full-memory mode. Applet mode is fine for browsing, but install
 > the HOME tile (or use title takeover) before starting a movie.
 
-**Nintendo Switch 2** — unzip `GMCA-switch2.nro.zip`, copy `GMCA-switch2.nro` to `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`.
+**Nintendo Switch 2** (beta) — unzip `GMCA-switch2.nro.zip`, copy `GMCA-switch2.nro` to `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`.
+
+> [!NOTE]
+> Beta: we don't own a Switch 2, so this build is tested by its users. Tell us what works and
+> what breaks in a [GitHub issue](https://github.com/thcolin/gamepad-media-center-aggregator/issues).
 
 **PS Vita** — install `GMCA.vpk` with VitaShell, or find GMCA on VitaDB. **Raspberry Pi / desktop** —
 grab the Flatpak or the desktop package from the latest release.
@@ -149,7 +153,7 @@ grab the Flatpak or the desktop package from the latest release.
 ## System requirements
 
 - **Nintendo Switch** with Atmosphère CFW (full-memory mode for playback)
-- **Nintendo Switch 2** with `kaiHEN` / `ounce-hbmenu`
+- **Nintendo Switch 2** (beta) with `kaiHEN` / `ounce-hbmenu`
 - **PS Vita** with HENkaku / h-encore
 - **Raspberry Pi / Linux** Flatpak (x86_64 / arm64v8) with OpenGL 3 support
 - **Windows** 7 or later with DirectX 11.1 support
