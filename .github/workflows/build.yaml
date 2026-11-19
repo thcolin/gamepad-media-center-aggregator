@@ -300,6 +300,11 @@ jobs:
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
+      # Some hosted runners mount overlayfs without redirect_dir, so renaming a
+      # directory from the image fails with EXDEV and the runtime update aborts.
+      # A named volume is seeded from the image and lives outside the overlay.
+      volumes:
+        - flatpak-system:/var/lib/flatpak
     runs-on: ${{ matrix.runner }}
     if: ${{ inputs.platform == 'flatpak' || github.event_name != 'workflow_dispatch' }}
     steps:
