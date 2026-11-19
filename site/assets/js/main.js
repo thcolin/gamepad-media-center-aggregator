@@ -93,7 +93,7 @@ if (heroStage) {
   // pairings. This walks all 16 exactly once, and no two consecutive frames
   // share a device OR a media center, loop wrap included. The <img> order in
   // the stage matches this same cycle.
-  const DEVS = ['switch', 'vita', 'switch2', 'pi'];
+  const DEVS = ['switch2', 'vita', 'switch', 'pi'];
   const MCS = ['plex', 'jellyfin', 'emby', 'stremio'];
   const N = DEVS.length * MCS.length; // 16
 
