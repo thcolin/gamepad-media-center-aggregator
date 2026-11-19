@@ -10,11 +10,13 @@
 
 GMCA is one native, controller-first **client**. Point it at any **media center** —
 **Plex, Jellyfin, Emby or Stremio** — and run it on any **device** you left in a drawer:
-**Nintendo Switch**, **PS Vita** or a **Raspberry Pi wired to the TV**. The interface never
-changes; only the accent colour and the tabs follow your server. Also runs on Windows, macOS, Linux and PS4.
+**Nintendo Switch**, **Nintendo Switch 2**, **PS Vita** or a **Raspberry Pi wired to the TV**.
+The interface never changes; only the accent colour and the tabs follow your server. Also runs on
+Windows, macOS, Linux and PS4.
 
 [![build](https://github.com/thcolin/gamepad-media-center-aggregator/actions/workflows/build.yaml/badge.svg)](https://github.com/thcolin/gamepad-media-center-aggregator/actions/workflows/build.yaml)
 [![NS](https://img.shields.io/badge/-Nintendo%20Switch-e4000f?style=flat&logo=Nintendo%20Switch)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
+[![NS2](https://img.shields.io/badge/-Nintendo%20Switch%202-e4000f?style=flat&logo=Nintendo%20Switch)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![PSVita](https://img.shields.io/badge/-PSVita-003791?style=flat&logo=PlayStation)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![download](https://img.shields.io/github/downloads/thcolin/gamepad-media-center-aggregator/total?label=downloads)](https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest)
 [![nightly](https://img.shields.io/badge/nightly-build-green)](https://nightly.link/thcolin/gamepad-media-center-aggregator/workflows/build.yaml/dev)
