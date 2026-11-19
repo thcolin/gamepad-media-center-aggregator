@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Guide — GMCA</title>
-  <meta name="description" content="How to install GMCA on Nintendo Switch, PS Vita, Raspberry Pi/Linux and desktop, connect Plex/Jellyfin/Emby/Stremio, playback controls, system requirements and FAQ.">
+  <meta name="description" content="How to install GMCA on Nintendo Switch and Switch 2, PS Vita, Raspberry Pi/Linux and desktop, connect Plex/Jellyfin/Emby/Stremio, playback controls, system requirements and FAQ.">
   <link rel="canonical" href="https://thcolin.github.io/gamepad-media-center-aggregator/guide.html">
   <meta property="og:type" content="website">
   <meta property="og:title" content="Guide — GMCA">
-  <meta property="og:description" content="Install GMCA on Switch, PS Vita, Raspberry Pi and desktop; connect Plex, Jellyfin, Emby or Stremio.">
+  <meta property="og:description" content="Install GMCA on Switch, Switch 2, PS Vita, Raspberry Pi and desktop; connect Plex, Jellyfin, Emby or Stremio.">
   <meta property="og:url" content="https://thcolin.github.io/gamepad-media-center-aggregator/guide.html">
   <meta property="og:image" content="https://thcolin.github.io/gamepad-media-center-aggregator/assets/img/og.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Guide — GMCA">
-  <meta name="twitter:description" content="Install GMCA on Switch, PS Vita, Raspberry Pi and desktop; connect Plex, Jellyfin, Emby or Stremio.">
+  <meta name="twitter:description" content="Install GMCA on Switch, Switch 2, PS Vita, Raspberry Pi and desktop; connect Plex, Jellyfin, Emby or Stremio.">
   <meta name="twitter:image" content="https://thcolin.github.io/gamepad-media-center-aggregator/assets/img/og.jpg">
   <meta name="theme-color" content="#0d0d10">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
@@ -49,7 +49,7 @@
       <p class="guide-kicker reveal">Operation manual</p>
       <h1 class="reveal" style="--i:1">Guide</h1>
       <nav class="toc reveal" style="--i:2" aria-label="On this page">
-        <a href="#switch"><span class="toc-num">01</span> Install on Nintendo Switch</a>
+        <a href="#switch"><span class="toc-num">01</span> Install on Nintendo Switch and Switch 2</a>
         <a href="#other"><span class="toc-num">02</span> PS Vita, Raspberry Pi &amp; desktop</a>
         <a href="#connect"><span class="toc-num">03</span> Connect a server</a>
         <a href="#controls"><span class="toc-num">04</span> Controls during playback</a>
@@ -62,9 +62,10 @@
     <section class="guide-section" id="switch">
       <div class="sec-head reveal">
         <span class="sec-num" aria-hidden="true">01</span>
-        <h2>Install on Nintendo Switch</h2>
+        <h2>Install on Nintendo Switch and Switch 2</h2>
       </div>
       <div class="guide-body reveal">
+        <h3>Nintendo Switch</h3>
         <p>You'll need a console running <a href="https://github.com/Atmosphere-NX/Atmosphere">Atmosphère</a> CFW
            and the homebrew menu.</p>
         <ol>
@@ -83,6 +84,19 @@
         </aside>
         <p>Coming from pleNx? GMCA reads your existing library, logins and downloads automatically on
            first launch, nothing to re-configure.</p>
+        <h3 id="switch2">Nintendo Switch 2</h3>
+        <p>You'll need a console running <a href="https://github.com/ouncebrew/kaihen">kaiHEN</a>
+           and <a href="https://github.com/ouncebrew/ounce-hbmenu">ounce-hbmenu</a>.</p>
+        <ol>
+          <li>Download <a href="https://github.com/thcolin/gamepad-media-center-aggregator/releases/latest/download/GMCA-switch2.nro.zip" data-track="download"><code>GMCA-switch2.nro.zip</code></a>
+              from the latest release, unzip it and copy <code>GMCA-switch2.nro</code> to <code>sdmc:/switch/</code>.</li>
+          <li>Launch GMCA from ounce-hbmenu.</li>
+          <li>Add your media server (see <a href="#connect">Connect a server</a>) and start watching.</li>
+        </ol>
+        <aside class="note">
+          <strong>Updates are installed by hand on Switch 2.</strong> The in-app updater does not
+          replace the Switch 2 build: download the new <code>GMCA-switch2.nro.zip</code> and copy it over.
+        </aside>
       </div>
     </section>
 
@@ -174,6 +188,7 @@
       <div class="guide-body reveal">
         <ul>
           <li><strong>Nintendo Switch</strong>:Atmosphère CFW, full-memory mode for playback</li>
+          <li><strong>Nintendo Switch 2</strong>:kaiHEN and ounce-hbmenu</li>
           <li><strong>PS Vita</strong>:HENkaku/h-encore jailbreak</li>
           <li><strong>Raspberry Pi / Linux</strong>:Flatpak (x86_64 / arm64v8), OpenGL 3 support</li>
           <li><strong>Windows</strong>:Windows 7 or later, DirectX 11.1 support</li>

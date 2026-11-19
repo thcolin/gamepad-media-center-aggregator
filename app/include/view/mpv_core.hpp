@@ -22,6 +22,8 @@
 #include <mpv/render_gl.h>
 #if defined(__PSV__) || defined(__PS4__)
 #include <GLES2/gl2.h>
+#elif defined(__SWITCH2__)
+#include <GLES3/gl3.h>
 #else
 #include <glad/glad.h>
 #endif
@@ -147,7 +149,9 @@ public:
 
     // 硬件解码
     inline static bool HARDWARE_DEC = false;
-#if defined(__SWITCH__) || defined(BOREALIS_USE_GXM) || defined(ANDROID)
+#if defined(__SWITCH2__)
+    inline static std::string PLAYER_HWDEC_METHOD = "no";
+#elif defined(__SWITCH__) || defined(BOREALIS_USE_GXM) || defined(ANDROID)
     inline static std::string PLAYER_HWDEC_METHOD = "auto";
 #elif defined(__PSV__)
     inline static std::string PLAYER_HWDEC_METHOD = "vita-copy";

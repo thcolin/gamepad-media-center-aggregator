@@ -30,6 +30,8 @@ extern std::unique_ptr<brls::D3D11Context> D3D11_CONTEXT;
 #else
 #ifdef __SDL2__
 #include <SDL2/SDL.h>
+#elif defined(__SWITCH2__)
+#include <EGL/egl.h>
 #else
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -44,6 +46,8 @@ static void *get_proc_address(void *unused, const char *name) {
 #ifdef __SDL2__
     SDL_GL_GetCurrentContext();
     return (void *)SDL_GL_GetProcAddress(name);
+#elif defined(__SWITCH2__)
+    return (void *)eglGetProcAddress(name);
 #else
     glfwGetCurrentContext();
     return (void *)glfwGetProcAddress(name);
@@ -86,6 +90,7 @@ static void deleteSurfaceObj() {
 void MPVCore::on_update(void *self) {
     MPVCore *mpv = reinterpret_cast<MPVCore *>(self);
     brls::sync([mpv]() {
+        if (!mpv->mpv_context) return;
         uint64_t flags = mpv_render_context_update(mpv->mpv_context);
 #if defined(MPV_SW_RENDER) || defined(BOREALIS_USE_GXM)
         if (flags & MPV_RENDER_UPDATE_FRAME) {
@@ -131,7 +136,12 @@ void MPVCore::init() {
 #endif
     this->mpv = mpv_create();
     if (!mpv) {
+#ifdef __SWITCH2__
+        brls::Logger::error("Error Create mpv Handle");
+        return;
+#else
         brls::fatal("Error Create mpv Handle");
+#endif
     }
 
     auto &conf = AppConfig::instance();
@@ -195,7 +205,11 @@ void MPVCore::init() {
         mpv_set_option_string(mpv, "cache", "no");
     }
     // Making the loading process faster
-#if defined(__SWITCH__)
+#if defined(__SWITCH2__)
+    mpv_set_option_string(mpv, "vd-lavc-dr", "yes");
+    mpv_set_option_string(mpv, "vd-lavc-threads", "4");
+    mpv_set_option_string(mpv, "hwdec", "no");
+#elif defined(__SWITCH__)
     mpv_set_option_string(mpv, "vd-lavc-dr", "yes");
     mpv_set_option_string(mpv, "vd-lavc-threads", "3");
     // This should fix random crash, but I don't know why.
@@ -259,7 +273,13 @@ void MPVCore::init() {
 
     if (mpv_initialize(mpv) < 0) {
         mpv_terminate_destroy(mpv);
+#ifdef __SWITCH2__
+        mpv = nullptr;
+        brls::Logger::error("Could not initialize mpv context");
+        return;
+#else
         brls::fatal("Could not initialize mpv context");
+#endif
     }
 
     this->setAspect(VIDEO_ASPECT);
@@ -389,14 +409,25 @@ void MPVCore::init() {
 #ifndef ANDROID
     if (mpv_render_context_create(&mpv_context, mpv, params) < 0) {
         mpv_terminate_destroy(mpv);
+#ifdef __SWITCH2__
+        mpv = nullptr;
+        brls::Logger::error("failed to initialize mpv render context");
+        return;
+#else
         brls::fatal("failed to initialize mpv context");
+#endif
     }
 #endif
 #ifdef BOREALIS_USE_D3D11
     misc::initCrashDump();
 #endif
-    brls::Logger::info("version: {} ffmpeg {}", mpv_get_property_string(mpv, "mpv-version"),
-        mpv_get_property_string(mpv, "ffmpeg-version"));
+    {
+        char *mpv_ver = mpv_get_property_string(mpv, "mpv-version");
+        char *ff_ver = mpv_get_property_string(mpv, "ffmpeg-version");
+        brls::Logger::info("version: {} ffmpeg {}", mpv_ver ? mpv_ver : "unknown", ff_ver ? ff_ver : "unknown");
+        if (mpv_ver) mpv_free(mpv_ver);
+        if (ff_ver) mpv_free(ff_ver);
+    }
 
     this->command("set", "audio-client-name", AppVersion::getPackageName().c_str());
     // set event callback
@@ -441,6 +472,7 @@ void MPVCore::init() {
 }
 
 void MPVCore::clean() {
+    if (!this->mpv) return;
     check_error(mpv_command_string(this->mpv, "quit"));
     brls::Application::getWindowFocusChangedEvent()->unsubscribe(focusSubscription);
     brls::Application::getWindowSizeChangedEvent()->unsubscribe(sizeSubscription);
@@ -638,6 +670,7 @@ std::string MPVCore::getCacheSpeed() const {
 }
 
 void MPVCore::eventMainLoop() {
+    if (!this->mpv) return;
     while (true) {
         mpv_event *event = mpv_wait_event(this->mpv, 0);
         switch (event->event_id) {
@@ -854,6 +887,7 @@ void MPVCore::reset() {
 }
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method, uint64_t userdata) {
+    if (!this->mpv) return;
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, url, extra);
     if (mpv_client_api_version() >= MPV_MAKE_VERSION(2, 3)) {
         const char *cmd[] = {"loadfile", url.c_str(), method.c_str(), "0", extra.c_str(), nullptr};
@@ -886,6 +920,7 @@ void MPVCore::setSpeed(double value) {
 
 void MPVCore::enableVO(bool value) {
     this->voEnabled = value;
+    if (!this->mpv) return;
     mpv_set_option_string(mpv, "vo", value ? MPVCore::VO.c_str() : "null");
 }
 
@@ -910,6 +945,7 @@ void MPVCore::setAspect(const std::string &value) {
 }
 
 std::string MPVCore::getString(const std::string &key) {
+    if (!this->mpv) return "";
     char *value = nullptr;
     mpv_get_property(mpv, key.c_str(), MPV_FORMAT_STRING, &value);
     if (!value) return "";
@@ -919,28 +955,33 @@ std::string MPVCore::getString(const std::string &key) {
 }
 
 double MPVCore::getDouble(const std::string &key) {
+    if (!this->mpv) return 0;
     double value = 0;
     mpv_get_property(mpv, key.c_str(), MPV_FORMAT_DOUBLE, &value);
     return value;
 }
 
 void MPVCore::setDouble(const std::string &key, double value) {
+    if (!this->mpv) return;
     mpv_set_property_async(mpv, 0, key.c_str(), MPV_FORMAT_DOUBLE, &value);
 }
 
 int64_t MPVCore::getInt(const std::string &key, int64_t default_value) {
+    if (!this->mpv) return default_value;
     int64_t value = default_value;
     mpv_get_property(mpv, key.c_str(), MPV_FORMAT_INT64, &value);
     return value;
 }
 
 void MPVCore::setInt(const std::string &key, int64_t value) {
+    if (!this->mpv) return;
     mpv_set_property_async(mpv, 0, key.c_str(), MPV_FORMAT_INT64, &value);
 }
 
 std::unordered_map<std::string, mpv_node> MPVCore::getNodeMap(const std::string &key) {
     mpv_node node;
     std::unordered_map<std::string, mpv_node> nodeMap;
+    if (!this->mpv) return nodeMap;
     if (mpv_get_property(mpv, key.c_str(), MPV_FORMAT_NODE, &node) >= 0) {
         if (node.format == MPV_FORMAT_NODE_MAP) {
             mpv_node_list *node_list = node.u.list;

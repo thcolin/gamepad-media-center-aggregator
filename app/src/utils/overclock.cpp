@@ -7,6 +7,9 @@ int SwitchSys::stock_gpu_clock = 0;
 int SwitchSys::stock_emc_clock = 0;
 
 void SwitchSys::setClock(bool overclock) {
+#ifdef __SWITCH2__
+    (void)overclock;
+#else
     if (overclock) {
         setClock(Module::Cpu, (int)CPUClock::Max);
         setClock(Module::Gpu, (int)GPUClock::Max);
@@ -16,9 +19,15 @@ void SwitchSys::setClock(bool overclock) {
         setClock(Module::Gpu, (int)GPUClock::Stock);
         setClock(Module::Emc, (int)EMCClock::Stock);
     }
+#endif
 }
 
 int SwitchSys::getClock(const SwitchSys::Module &module, bool stockClocks) {
+#ifdef __SWITCH2__
+    (void)module;
+    (void)stockClocks;
+    return 0;
+#else
     u32 hz = 0;
     int bus_id = 0;
     bool is_old = hosversionBefore(8, 0, 0);
@@ -59,9 +68,15 @@ int SwitchSys::getClock(const SwitchSys::Module &module, bool stockClocks) {
         clkrstCloseSession(&session);
     }
     return (int)hz;
+#endif
 }
 
 bool SwitchSys::setClock(const SwitchSys::Module &module, int hz) {
+#ifdef __SWITCH2__
+    (void)module;
+    (void)hz;
+    return false;
+#else
     int new_hz = hz;
     int bus_id = (int)module;
     bool is_old = hosversionBefore(8, 0, 0);
@@ -94,6 +109,7 @@ bool SwitchSys::setClock(const SwitchSys::Module &module, int hz) {
         clkrstCloseSession(&session);
     }
     return false;
+#endif
 }
 
 #endif

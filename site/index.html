@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GMCA — a gamepad-first media client for every server, on the screens you forgot</title>
-  <meta name="description" content="GMCA (Gamepad Media Center Aggregator) is a native, controller-first client for Plex, Jellyfin, Emby, Stremio and file servers, running on the Nintendo Switch, PS Vita, a Raspberry Pi on the TV and the desktop. Free and open source.">
+  <meta name="description" content="GMCA (Gamepad Media Center Aggregator) is a native, controller-first client for Plex, Jellyfin, Emby, Stremio and file servers, running on the Nintendo Switch and Switch 2, PS Vita, a Raspberry Pi on the TV and the desktop. Free and open source.">
   <meta name="theme-color" content="#0d0d10">
   <link rel="icon" type="image/png" sizes="32x32" href="assets/img/favicon-32.png">
   <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
@@ -13,14 +13,14 @@
   <meta property="og:site_name" content="GMCA">
   <meta property="og:url" content="https://thcolin.github.io/gamepad-media-center-aggregator/">
   <meta property="og:title" content="GMCA — every media server, on the screens you forgot">
-  <meta property="og:description" content="One controller-first app for Plex, Jellyfin, Emby and Stremio, on the Switch, PS Vita, a Raspberry Pi on the TV, and the desktop.">
+  <meta property="og:description" content="One controller-first app for Plex, Jellyfin, Emby and Stremio, on the Switch and Switch 2, PS Vita, a Raspberry Pi on the TV, and the desktop.">
   <meta property="og:image" content="https://thcolin.github.io/gamepad-media-center-aggregator/assets/img/og.jpg">
   <meta property="og:image:width" content="1600">
   <meta property="og:image:height" content="840">
   <meta property="og:image:alt" content="GMCA — Gamepad Media Center Aggregator">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="GMCA — every media server, on the screens you forgot">
-  <meta name="twitter:description" content="One controller-first app for Plex, Jellyfin, Emby and Stremio, on the Switch, PS Vita, a Raspberry Pi on the TV, and the desktop.">
+  <meta name="twitter:description" content="One controller-first app for Plex, Jellyfin, Emby and Stremio, on the Switch and Switch 2, PS Vita, a Raspberry Pi on the TV, and the desktop.">
   <meta name="twitter:image" content="https://thcolin.github.io/gamepad-media-center-aggregator/assets/img/og.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,21 +76,25 @@
 
         <figure class="hero-media center-media reveal">
           <div class="hero-stage" id="hero-stage">
-            <!-- 12 combos = every device x every media center. Order = rotation
-                 cycle: device advances (switch/vita/pi) and media center advances
-                 (plex/jellyfin/emby/stremio) at each step, covering all 12. -->
+            <!-- 16 combos = every device x every media center. Order = rotation
+                 cycle of main.js: device advances (switch/vita/switch2/pi) at each
+                 step, media center (plex/jellyfin/emby/stremio) one extra step per lap. -->
             <img class="dev-img on" src="assets/img/hero/switch-plex.webp" alt="GMCA playing a media center on a repurposed game console" width="1280" height="640">
             <img class="dev-img" src="assets/img/hero/vita-jellyfin.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/tv-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/switch-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/vita-plex.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/tv-jellyfin.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/switch-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/vita-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/tv-plex.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch2-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/tv-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
             <img class="dev-img" src="assets/img/hero/switch-jellyfin.webp" alt="" aria-hidden="true" width="1280" height="640">
             <img class="dev-img" src="assets/img/hero/vita-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
-            <img class="dev-img" src="assets/img/hero/tv-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch2-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/tv-plex.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/vita-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch2-plex.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/tv-jellyfin.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch-stremio.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/vita-plex.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/switch2-jellyfin.webp" alt="" aria-hidden="true" width="1280" height="640">
+            <img class="dev-img" src="assets/img/hero/tv-emby.webp" alt="" aria-hidden="true" width="1280" height="640">
           </div>
           <figcaption><span class="tag" id="hero-cap-mc">Plex</span> · <span id="hero-cap-dev">Nintendo Switch</span></figcaption>
         </figure>
@@ -489,7 +493,7 @@
     </div>
     <p class="footer-legal">
       GMCA is an independent, third-party project, not affiliated with or endorsed by Plex, Jellyfin, Emby or Stremio.
-      Nintendo Switch is a trademark of Nintendo; PS Vita is a trademark of Sony. ·
+      Nintendo Switch and Nintendo Switch 2 are trademarks of Nintendo; PS Vita is a trademark of Sony. ·
       <span data-version>v1.4.0</span> · <a href="https://github.com/thcolin/gamepad-media-center-aggregator/blob/dev/CHANGELOG.md">Changelog</a>
     </p>
   </footer>

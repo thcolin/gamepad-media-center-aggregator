@@ -81,6 +81,7 @@ have them. Keep every server and profile side by side and hop between them from 
 
 - **Nintendo Switch** — native NRO on Atmosphère CFW; HOME-menu tile for full-memory playback;
   external USB drives via [libusbhsfs](https://github.com/DarkMatterCore/libusbhsfs).
+- **Nintendo Switch 2** — native NRO via [ounce-devkit](https://github.com/ouncebrew/ounce-devkit) (`libounce` + `OunceVK` EGL/GLES3).
 - **PS Vita** — a first-class VPK for jailbroken consoles (on [VitaDB](https://www.rinnegatamante.eu/vitadb/));
   that OLED finally earns its keep again.
 - **Raspberry Pi on the TV** — a Flatpak (x86_64 / arm64v8) and an Arch package; a Pi wired to the
@@ -125,6 +126,8 @@ artifacts on [nightly.link](https://nightly.link/thcolin/gamepad-media-center-ag
 > Video playback needs full-memory mode. Applet mode is fine for browsing, but install
 > the HOME tile (or use title takeover) before starting a movie.
 
+**Nintendo Switch 2** — unzip `GMCA-switch2.nro.zip`, copy `GMCA-switch2.nro` to `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`. The in-app updater does not replace the Switch 2 build: update it by hand the same way.
+
 **PS Vita** — install `GMCA.vpk` with VitaShell, or find GMCA on VitaDB. **Raspberry Pi / desktop** —
 grab the Flatpak or the desktop package from the latest release.
 
@@ -144,6 +147,7 @@ grab the Flatpak or the desktop package from the latest release.
 ## System requirements
 
 - **Nintendo Switch** with Atmosphère CFW (full-memory mode for playback)
+- **Nintendo Switch 2** with `kaiHEN` / `ounce-hbmenu`
 - **PS Vita** with HENkaku / h-encore
 - **Raspberry Pi / Linux** Flatpak (x86_64 / arm64v8) with OpenGL 3 support
 - **Windows** 7 or later with DirectX 11.1 support
@@ -202,6 +206,14 @@ Or with a local [devkitPro](https://devkitpro.org/wiki/Getting_Started) toolchai
 sudo dkp-pacman -S switch-dev switch-glfw switch-libwebp switch-curl switch-libmpv
 cmake -B build_switch -DPLATFORM_SWITCH=ON
 make -C build_switch GMCA.nro -j$(nproc)
+```
+
+### Nintendo Switch 2
+
+Requires `devkitA64`, `switch-portlibs`, and [ounce-devkit](https://github.com/ouncebrew/ounce-devkit):
+
+```shell
+./scripts/build-switch2.sh
 ```
 
 ### Desktop (macOS / Linux)

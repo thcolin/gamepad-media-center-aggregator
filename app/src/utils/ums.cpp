@@ -60,6 +60,13 @@ int Ums::init() {
     return 0;
 }
 
+#elif defined(__SWITCH__)
+
+int Ums::init() {
+    this->devices.push_back(Device{.id = -1, .name = "SD Card", .mount = "sdmc:"});
+    return 0;
+}
+
 #elif defined(__PS4__)
 #include <dirent.h>
 #include <string>
