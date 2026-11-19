@@ -385,17 +385,6 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
         // at startup, give priority to login requests
         if (delay > 0) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         try {
-#if defined(__SWITCH2__) && defined(GMCA_UPDATE_TEST_URL)
-            // test build only (-DGMCA_UPDATE_TEST_URL): installs a fixed archive
-            // whatever the version, to try the install path on a console
-            brls::sync([]() {
-                auto dialog = makeUpdateDialog(brls::getStr("main/setting/others/upgrade", "test"), "");
-                dialog->addButton("hints/cancel"_i18n, []() {});
-                dialog->addButton("hints/ok"_i18n, []() { startUpdate("test", GMCA_UPDATE_TEST_URL, 0); });
-                dialog->open();
-            });
-            return;
-#endif
             std::string url = fmt::format("https://api.github.com/repos/{}/releases/latest", git_repo);
             auto resp = HTTP::get(url, HTTP::Timeout{});
             nlohmann::json j = nlohmann::json::parse(resp);

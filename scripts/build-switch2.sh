@@ -131,9 +131,6 @@ CMAKE_EXTRA_ARGS=()
 if [[ -n "${GMCA_VERSION_BUILD:-}" ]]; then
   CMAKE_EXTRA_ARGS+=("-DVERSION_BUILD=${GMCA_VERSION_BUILD}")
 fi
-if [[ -n "${GMCA_UPDATE_TEST_URL:-}" ]]; then
-  CMAKE_EXTRA_ARGS+=("-DGMCA_UPDATE_TEST_URL=${GMCA_UPDATE_TEST_URL}")
-fi
 cmake -B "$BUILD_DIR" -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/libounce/cmake/Switch2.cmake" \
   -DCMAKE_BUILD_TYPE=Release \

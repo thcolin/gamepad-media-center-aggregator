@@ -108,11 +108,6 @@ if (PLATFORM_SWITCH)
         list(APPEND MAIN_SRC ${CMAKE_SOURCE_DIR}/library/miniz/miniz.c)
         list(APPEND APP_PLATFORM_INCLUDE ${CMAKE_SOURCE_DIR}/library/miniz)
         list(APPEND APP_PLATFORM_OPTION -DMINIZ_NO_TIME)
-        # test builds only: install this archive instead of the latest release
-        set(GMCA_UPDATE_TEST_URL "" CACHE STRING "Switch 2 update archive for a test build")
-        if (GMCA_UPDATE_TEST_URL)
-            list(APPEND APP_PLATFORM_OPTION "-DGMCA_UPDATE_TEST_URL=\"${GMCA_UPDATE_TEST_URL}\"")
-        endif ()
     endif ()
 elseif (PLATFORM_PS4)
     # Static-init guards that work with the PS4's thread ids, see the file
