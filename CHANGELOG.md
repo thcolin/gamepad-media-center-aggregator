@@ -9,6 +9,19 @@ prepared with [git-cliff](https://git-cliff.org/) from conventional commits
 hand. For the history of the upstream project this fork is based on, see the
 [Switchfin changelog](https://github.com/dragonflylee/switchfin/blob/dev/CHANGELOG.md).
 
+## [1.5.0] - 2026-11-19
+
+### Added
+
+- **Nintendo Switch 2 (#119).** A native Switch 2 build, `GMCA-switch2.nro`,
+  shipped in the release as `GMCA-switch2.nro.zip`. Unzip it, copy the NRO to
+  `sdmc:/switch/` and launch it from `ounce-hbmenu` / `kaiHEN`. Ported by
+  @davidkalil10 on `libounce` and `OunceVK`, and tested on his console. Video
+  is decoded on the CPU for now.
+- **In-app updates on Switch 2 (#121).** The updater downloads
+  `GMCA-switch2.nro.zip`, extracts the NRO and replaces the running one, like
+  on Switch 1. Switch 1 updates never pick the Switch 2 build.
+
 ## [1.4.0] - 2026-10-24
 
 ### Added
