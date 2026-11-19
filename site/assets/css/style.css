@@ -408,6 +408,15 @@ html:not(.js) .nav { transform: none; }
 .device .tagline .t1 { color: var(--dc1); }
 .device .tagline .t2 { color: var(--dc2); }
 .device h3 { font-size: 1.5rem; font-stretch: 82%; }
+/* Beta tag: the .meta chip, in the Switch 2 coral of the hero (main.js DEV map) */
+.beta {
+  display: inline-block; vertical-align: middle; font-family: var(--font-mono); font-size: 0.6rem;
+  font-weight: 400; font-stretch: 100%; letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.4;
+  color: #ff7a5c; border: 1px solid currentColor; border-radius: 3px; padding: 0.2rem 0.5rem; margin-left: 0.4rem;
+}
+.device .tagline, .device .beta-note { flex: none; }
+.device .beta-note { margin-top: -0.4rem; font-size: 0.84rem; }
+.device .beta-note a { color: var(--text); border-bottom: 1px solid var(--line-2); }
 .device p { margin: 0.6rem 0 1rem; color: var(--text-dim); font-size: 0.96rem; flex: 1; }
 .device .meta { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .device .meta span {
