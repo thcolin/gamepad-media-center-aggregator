@@ -14,11 +14,10 @@
 extern "C" int gmca_orbis_syscall(int num, ...);  // utils/ps4_escape.cpp
 
 #ifdef GMCA_PS4_APP
-// The app links libSceSystemService (borealis calls it), so these stand in when the lookup by
+// The app links libSceSystemService (borealis calls it), so LaunchApp stands in when the lookup by
 // name finds nothing (it found nothing in GMCA's first console run). Declared here because
 // OpenOrbis' SystemService.h has LaunchApp as void(void).
 extern "C" int sceSystemServiceLaunchApp(const char* titleId, const char** argv, void* param);
-extern "C" int sceSystemServiceLoadExec(const char* path, const char** args);
 #endif
 
 namespace {
@@ -34,7 +33,6 @@ struct LaunchParam {
 
 struct SystemService {
     int (*registerDaemon)() = nullptr;
-    int (*loadExec)(const char* path, const char** args) = nullptr;
     int (*launchApp)(const char* titleId, const char** argv, LaunchParam* param) = nullptr;
     int (*bigAppId)() = nullptr;
 };
@@ -74,17 +72,14 @@ int resolveSystemService() {
     const int h = moduleHandle("libSceSystemService.sprx");
     if (h >= 0) {
         resolve(h, "sceSystemServiceRegisterDaemon", sys.registerDaemon);
-        resolve(h, "sceSystemServiceLoadExec", sys.loadExec);
         resolve(h, "sceSystemServiceLaunchApp", sys.launchApp);
         resolve(h, "sceSystemServiceGetAppIdOfBigApp", sys.bigAppId);
     }
 #ifdef GMCA_PS4_APP
-    if (!sys.loadExec) sys.loadExec = &sceSystemServiceLoadExec;
     if (!sys.launchApp)
         sys.launchApp = reinterpret_cast<int (*)(const char*, const char**, LaunchParam*)>(&sceSystemServiceLaunchApp);
 #endif
-    return int(sys.registerDaemon != nullptr) + int(sys.loadExec != nullptr) + int(sys.launchApp != nullptr) +
-           int(sys.bigAppId != nullptr);
+    return int(sys.registerDaemon != nullptr) + int(sys.launchApp != nullptr) + int(sys.bigAppId != nullptr);
 }
 
 std::string loadedModules() {
@@ -111,8 +106,6 @@ int launchApp(const char* titleId) {
     p.checkFlag = 2;
     return sys.launchApp(titleId, nullptr, &p);
 }
-
-int loadExec(const char* path) { return sys.loadExec ? sys.loadExec(path, nullptr) : -1; }
 
 int registerDaemon() { return sys.registerDaemon ? sys.registerDaemon() : -1; }
 

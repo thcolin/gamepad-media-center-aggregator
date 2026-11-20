@@ -121,8 +121,8 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
     // Gold Torrent's app does, because the diag runs before anything else has loaded it.
     const unsigned loaded = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE);
     const int resolved = ps4::resolveSystemService();
-    lg(log, "SystemService: load 0x%08x, %d of 4 functions", loaded, resolved);
-    if (resolved < 4) lg(log, "modules: %s", ps4::loadedModules().c_str());
+    lg(log, "SystemService: load 0x%08x, %d of 3 functions", loaded, resolved);
+    if (resolved < 3) lg(log, "modules: %s", ps4::loadedModules().c_str());
 
     mkdir("/data/GMCA", 0777);
     mkdir(dir, 0777);

@@ -446,15 +446,6 @@ elseif (PLATFORM_PSV)
         FILE ${PSV_ASSETS_FILES}
     )
 elseif (PLATFORM_PS4)
-    # Diag self-update test harness, off unless -DGMCA_UPDATE_TEST=<tag> is passed.
-    if (GMCA_UPDATE_TEST)
-        add_compile_definitions(GMCA_UPDATE_TEST GMCA_UPDATE_TEST_TAG="${GMCA_UPDATE_TEST}")
-        # and, with -DGMCA_UPDATE_API_URL=<url>, the update check reads a test server's
-        # releases/latest JSON instead of GitHub's
-        if (GMCA_UPDATE_API_URL)
-            add_compile_definitions(GMCA_UPDATE_API_URL="${GMCA_UPDATE_API_URL}")
-        endif()
-    endif()
     # Home-screen name, overridable so a diag build reads apart from real GMCA.
     if (NOT PS4_PKG_NAME)
         set(PS4_PKG_NAME ${PROJECT_NAME})

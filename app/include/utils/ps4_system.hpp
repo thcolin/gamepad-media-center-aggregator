@@ -11,8 +11,8 @@ namespace ps4 {
 /// Resolves the functions below from libSceSystemService.sprx, which must already be loaded (the
 /// app links it, the helper loads it first). OpenOrbis declares several of them wrongly, so a
 /// missing one shows up as a -1 result instead of a process that won't start. In the app
-/// (GMCA_PS4_APP), the linked LaunchApp and LoadExec stand in when the lookup by name fails. How
-/// many of the four were found.
+/// (GMCA_PS4_APP), the linked LaunchApp stands in when the lookup by name fails. How many of the
+/// three were found.
 int resolveSystemService();
 
 /// The names of the modules this process has loaded, for a log line when a lookup fails.
@@ -20,7 +20,6 @@ std::string loadedModules();
 
 /// Each returns the call's result, or -1 when the function was not resolved.
 int launchApp(const char* titleId);  // sceSystemServiceLaunchApp; 0x8094000C: already running
-int loadExec(const char* path);      // sceSystemServiceLoadExec(path, nullptr); "exit" closes the app
 int registerDaemon();                // sceSystemServiceRegisterDaemon
 
 /// The app id of the app in the foreground (sceSystemServiceGetAppIdOfBigApp), or -1 when there is

@@ -502,11 +502,7 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
         // at startup, give priority to login requests
         if (delay > 0) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         try {
-#ifdef GMCA_UPDATE_API_URL
-            std::string url = GMCA_UPDATE_API_URL;  // diag builds only: a test server instead of GitHub
-#else
             std::string url = fmt::format("https://api.github.com/repos/{}/releases/latest", git_repo);
-#endif
             auto resp = HTTP::get(url, HTTP::Timeout{});
             nlohmann::json j = nlohmann::json::parse(resp);
             std::string latest_ver = j.at("tag_name").get<std::string>();
