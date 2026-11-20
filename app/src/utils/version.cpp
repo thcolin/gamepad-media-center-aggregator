@@ -364,26 +364,39 @@ static int64_t ps4FileSize(const std::string& path) {
     return static_cast<int64_t>(st.st_size);
 }
 
-/// Hands the downloaded package to the update helper (cf. ps4::update::start) and closes GMCA at
-/// once: the system can only install over a closed app, and the helper waits a minute at most.
-/// On failure GMCA stays open and the package is kept.
+/// Hands the downloaded package to the update helper (cf. ps4::update::handOver) and closes GMCA
+/// once the helper has answered: the system can only install over a closed app, and the helper
+/// waits a minute at most. On failure GMCA stays open and the package is kept. Called on the main
+/// thread (the confirm dialog's button), where the hand-over has to run.
 static void installPs4Update(const std::string& latest_ver) {
+    auto failed = [](const std::string& err) {
+        Dialog::show(brls::getStr("main/setting/others/ps4_update_failed", err) + "\n" +
+                     brls::getStr("main/setting/others/ps4_update_kept", ps4::update::stagedPkg));
+    };
+    std::FILE* log = std::fopen(ps4::update::appLog, "a");
+    if (log) std::fprintf(log, "\n==== update to %s from %s ====\n", latest_ver.c_str(), AppVersion::getVersion().c_str());
+    std::string err;
+    if (!ps4::update::handOver(ps4::update::stagedPkg, latest_ver, err, log)) {
+        if (log) {
+            std::fprintf(log, "FAILED: %s\n", err.c_str());
+            std::fclose(log);
+        }
+        failed(err);
+        return;
+    }
     brls::Application::notify("main/setting/others/installing"_i18n);
-    ThreadPool::instance().submit([latest_ver](HTTP& s) {
+    ThreadPool::instance().submit([log, failed](HTTP& s) {
         std::string err;
-        std::FILE* log = std::fopen(ps4::update::appLog, "a");
-        if (log) std::fprintf(log, "\n==== update to %s from %s ====\n", latest_ver.c_str(), AppVersion::getVersion().c_str());
-        bool ok = ps4::update::start(ps4::update::stagedPkg, latest_ver, err, log);
+        bool ok = ps4::update::waitForHelper(err, log);
         if (log) {
             std::fprintf(log, "%s%s\n", ok ? "helper waiting, closing GMCA" : "FAILED: ", ok ? "" : err.c_str());
             std::fclose(log);
         }
-        brls::sync([ok, err]() {
+        brls::sync([ok, err, failed]() {
             if (ok)
                 Dialog::quitAppNow(false);
             else
-                Dialog::show(brls::getStr("main/setting/others/ps4_update_failed", err) + "\n" +
-                             brls::getStr("main/setting/others/ps4_update_kept", ps4::update::stagedPkg));
+                failed(err);
         });
     });
 }

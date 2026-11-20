@@ -112,7 +112,10 @@ std::string hex(int r) {
     return b;
 }
 
-void setStatus(const std::string& line) {
+// "<state> <time> <detail>" (utils/ps4_update_status.hpp): the time lets the app tell a helper
+// that died from one still at work
+void setStatus(const std::string& state, const std::string& detail) {
+    const std::string line = upd::formatStatus(state, int64_t(std::time(nullptr)), detail);
     lg("status: %s", line.c_str());
     ps4::writeFile(upd::statusFile, line + "\n");
 }
@@ -249,7 +252,7 @@ std::string install(const Request& r) {
     lg("start task %d -> %s", task, hex(rc).c_str());
     if (rc != 0) return "the install did not start (" + hex(rc) + ")";
 
-    setStatus("installing");
+    setStatus("installing", r.label);
     std::string why;
     rc = waitInstall(task, contentId, r.title, oldVersion, why);
     lg("install finished: %s; version now %s", rc == 0 ? "ok" : why.c_str(), ps4::installedVersion(r.title).c_str());
@@ -296,7 +299,7 @@ int main() {
 
     Request r;
     if (!readRequest(r)) {
-        setStatus("failed no update request");
+        setStatus("failed", "no update request");
         leave();
     }
     lg("request: title %s, pkg %s, name %s, label %s", r.title.c_str(), r.pkg.c_str(), r.name.c_str(), r.label.c_str());
@@ -308,7 +311,7 @@ int main() {
     // is refused.
     const int gmcaId = ps4::foregroundAppId();
     lg("foreground app id 0x%08x", (unsigned)gmcaId);
-    setStatus("waiting");
+    setStatus("waiting", r.label);
     if (gmcaId < 0) {
         lg("can't tell when %s closes: waiting 7 s", r.title.c_str());
         sleep(7);  // GMCA usually closes within 5 s; a refused install leaves it as it was
@@ -320,7 +323,7 @@ int main() {
         }
         if (ps4::foregroundAppId() == gmcaId) {
             lg("%s still in the foreground after 60 s", r.title.c_str());
-            setStatus("failed " + r.name + " did not close");
+            setStatus("failed", r.name + " did not close");
             ps4::notify(r.name + " didn't update: it didn't close. Nothing changed.");
             leave();
         }
@@ -332,10 +335,10 @@ int main() {
     const std::string why = install(r);
     if (why.empty()) {
         unlink(appPath(r.pkg).c_str());
-        setStatus("done " + r.label);
+        setStatus("done", r.label);
         ps4::notify(r.name + " " + r.label + " is installed. Open it when you like.");
     } else {
-        setStatus("failed " + why);
+        setStatus("failed", why);
         ps4::notify(r.name + " didn't update (" + why + "). The installed version is unchanged.");
     }
     leave();

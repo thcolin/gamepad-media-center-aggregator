@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstdarg>
 #include <cstring>
+#include <ctime>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -87,7 +88,7 @@ bool installHelper(const std::vector<HelperFile>& files, std::FILE* log) {
 
 namespace ps4::update {
 
-bool start(const std::string& pkgPath, const std::string& label, std::string& err, std::FILE* log) {
+bool handOver(const std::string& pkgPath, const std::string& label, std::string& err, std::FILE* log) {
     // BGFT reads the package through the system's path for /data
     if (pkgPath.rfind("/data/", 0) != 0) {
         err = "the package must be under /data";
@@ -118,7 +119,7 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
     }
 
     // Loaded and resolved before the escape: loader calls inside it end the app. Loaded here, as
-    // Gold Torrent's app does, because the diag runs before anything else has loaded it.
+    // Gold Torrent's app does, in case nothing has loaded it yet.
     const unsigned loaded = sceSysmoduleLoadModuleInternal(ORBIS_SYSMODULE_INTERNAL_SYSTEM_SERVICE);
     const int resolved = ps4::resolveSystemService();
     lg(log, "SystemService: load 0x%08x, %d of 3 functions", loaded, resolved);
@@ -161,14 +162,17 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
         unlink(requestFile);
         return false;
     }
+    return true;
+}
 
+bool waitForHelper(std::string& err, std::FILE* log) {
     // The helper says "waiting" once it has read the request; then it waits for this app to close.
     for (int i = 0; i < 40; ++i) {
-        const std::string status = lastStatus();
-        if (!status.empty()) {
-            lg(log, "helper status after %.1f s: %s", i * 0.5, status.c_str());
-            if (status.rfind("failed", 0) == 0) {
-                err = "the update helper stopped: " + status.substr(status.size() > 7 ? 7 : status.size());
+        const Status status = lastStatus();
+        if (!status.state.empty()) {
+            lg(log, "helper status after %.1f s: %s %s", i * 0.5, status.state.c_str(), status.detail.c_str());
+            if (status.state == "failed") {
+                err = "the update helper stopped: " + status.detail;
                 return false;
             }
             return true;
@@ -180,11 +184,14 @@ bool start(const std::string& pkgPath, const std::string& label, std::string& er
     return false;
 }
 
-std::string lastStatus() {
+Status lastStatus() {
     std::string s;
-    if (!ps4::readFile(statusFile, s)) return "";
-    while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
-    return s;
+    if (!ps4::readFile(statusFile, s)) return {};
+    return parseStatus(s);
+}
+
+Outcome lastOutcome(const std::string& appVersion, std::string& why) {
+    return outcomeOf(lastStatus(), int64_t(std::time(nullptr)), appVersion, why);
 }
 
 void clearStatus() { unlink(statusFile); }
@@ -195,8 +202,8 @@ void cleanUp(std::FILE* log) {
         if (stat(f, &st) == 0 && st.st_size > 64 * 1024) unlink(f);
 
     if (stat(helperMarker, &st) != 0) return;  // no helper went under /system
-    const std::string status = lastStatus();
-    if (status == "waiting" || status == "installing") return;  // it may still be at work
+    std::string why;
+    if (lastOutcome("", why) == Outcome::Running) return;  // it may still be at work
 
     if (!ps4::beginEscape()) {
         ps4::endEscape();

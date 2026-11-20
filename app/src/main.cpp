@@ -103,6 +103,13 @@ int main(int argc, char* argv[]) {
     // 0x4000 is FreeBSD's MSG_NBIO) and SO_NOSIGPIPE isn't defined in the headers.
     // Ignore it: the send fails with EPIPE instead.
     std::signal(SIGPIPE, SIG_IGN);
+    // What an earlier in-app update left under /system goes first, while the app has no other
+    // thread: the cleanup holds the escape (utils/ps4_self_update.hpp).
+    {
+        std::FILE* log = std::fopen(ps4::update::appLog, "a");
+        ps4::update::cleanUp(log);
+        if (log) std::fclose(log);
+    }
 #endif
     std::vector<std::string> items;
     for (int i = 1; i < argc; i++) {
@@ -232,12 +239,12 @@ int main(int argc, char* argv[]) {
     if (AppVersion::getVersion().compare(v)) AppVersion::checkUpdate();
 
 #ifdef __PS4__
-    // What the last in-app update did (utils/ps4_self_update.hpp): a failure is shown once, a
-    // success was already announced by the system's notification. "waiting" or "installing" stay:
-    // the helper may still be at work, and the next update clears them.
-    std::string lastUpdate = ps4::update::lastStatus();
-    if (lastUpdate.rfind("failed", 0) == 0) {
-        std::string why = lastUpdate.size() > 7 ? lastUpdate.substr(7) : lastUpdate;
+    // What the last in-app update did (utils/ps4_self_update.hpp): a failure, or a helper that
+    // died, is shown once; a success was already announced by the system's notification. A helper
+    // still at work keeps its status.
+    std::string why;
+    const ps4::update::Outcome lastUpdate = ps4::update::lastOutcome(AppVersion::getVersion(), why);
+    if (lastUpdate == ps4::update::Outcome::Failed) {
         struct stat st;
         bool kept = stat(ps4::update::stagedPkg, &st) == 0;
         brls::sync([why, kept]() {
@@ -246,15 +253,8 @@ int main(int argc, char* argv[]) {
             Dialog::show(msg);
         });
     }
-    if (lastUpdate.rfind("failed", 0) == 0 || lastUpdate.rfind("done", 0) == 0) ps4::update::clearStatus();
-    // and take out what it left under /system, once startup is over (the cleanup runs inside the
-    // escape, where a module load from another thread would end the app)
-    ThreadPool::instance().submit([](HTTP& s) {
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        std::FILE* log = std::fopen(ps4::update::appLog, "a");
-        ps4::update::cleanUp(log);
-        if (log) std::fclose(log);
-    });
+    if (lastUpdate == ps4::update::Outcome::Failed || lastUpdate == ps4::update::Outcome::Done)
+        ps4::update::clearStatus();
 #endif
 
     // Run the app
