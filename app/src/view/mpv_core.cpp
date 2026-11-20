@@ -475,13 +475,27 @@ void MPVCore::init() {
 }
 
 #ifdef __PS4__
-// One end per loadfile from /mnt/usb. The escape is only needed to open the file: it is
-// released on FILE_LOADED (fd held), or on END_FILE when the load failed before that, and
-// clean() drains whatever is left. Holding it longer hides /app0 from the settings menu.
-void MPVCore::releaseUsbEscape() {
-    if (usb_escapes <= 0) return;
-    usb_escapes--;
-    ps4::endEscape();
+// A command that reads a file under /mnt/usb (a loadfile, a sub-add) holds the escape only until
+// mpv has the file: a load until its FILE_LOADED (fd held), or its END_FILE when it failed before
+// that, matched by playlist entry so that the events of another load can't end it; a sub-add
+// until its reply. clean() drains whatever is left. Holding it longer hides /app0 from the
+// settings menu.
+uint64_t MPVCore::holdUsbEscape(uint64_t userdata, int64_t entry) {
+    const uint64_t tag = userdata ? userdata : usb_next_tag++;
+    ps4::beginEscape();
+    usb_holds[tag] = entry;
+    return tag;
+}
+
+void MPVCore::releaseUsbEscapes(const std::function<bool(uint64_t tag, int64_t entry)> &which) {
+    for (auto it = usb_holds.begin(); it != usb_holds.end();) {
+        if (which(it->first, it->second)) {
+            ps4::endEscape();
+            it = usb_holds.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 #endif
 
@@ -492,7 +506,7 @@ void MPVCore::clean() {
     brls::Application::getWindowSizeChangedEvent()->unsubscribe(sizeSubscription);
 
 #ifdef __PS4__
-    while (usb_escapes > 0) releaseUsbEscape();
+    releaseUsbEscapes([](uint64_t, int64_t) { return true; });
 #endif
     brls::Logger::info("trying free mpv context");
     if (this->mpv_context) {
@@ -723,8 +737,9 @@ void MPVCore::eventMainLoop() {
             brls::Logger::info("MPVCore => EVENT_FILE_LOADED");
             // event 8: 文件预加载结束，准备解码
 #ifdef __PS4__
-            usb_file_loaded = true;
-            releaseUsbEscape();  // the file is open: back inside the sandbox
+            // the file is open: back inside the sandbox
+            loaded_entry = current_entry;
+            releaseUsbEscapes([this](uint64_t, int64_t entry) { return entry == loaded_entry; });
 #endif
             mpvCoreEvent.fire(MpvEventEnum::MPV_LOADED);
             break;
@@ -733,7 +748,9 @@ void MPVCore::eventMainLoop() {
             this->last_error_line.clear();  // errors from a previous load are stale
             this->last_warn_line.clear();
 #ifdef __PS4__
-            usb_file_loaded = false;
+            current_entry = ((mpv_event_start_file *)event->data)->playlist_entry_id;
+            // a load from an earlier entry still holding was dropped before it started
+            releaseUsbEscapes([this](uint64_t, int64_t entry) { return entry > 0 && entry < current_entry; });
 #endif
             this->load_generation++;
             brls::Logger::info("MPVCore => EVENT_START_FILE");
@@ -755,7 +772,11 @@ void MPVCore::eventMainLoop() {
             // event 7: 文件播放结束
             this->video_stopped = true;
 #ifdef __PS4__
-            if (!usb_file_loaded) releaseUsbEscape();  // failed or stopped before FILE_LOADED
+            {
+                // this load failed or stopped before its FILE_LOADED
+                const int64_t ended = ((mpv_event_end_file *)event->data)->playlist_entry_id;
+                releaseUsbEscapes([ended](uint64_t, int64_t entry) { return entry == ended; });
+            }
 #endif
             auto node = (mpv_event_end_file *)event->data;
             if (node->reason == MPV_END_FILE_REASON_ERROR) {
@@ -778,6 +799,24 @@ void MPVCore::eventMainLoop() {
         }
         case MPV_EVENT_COMMAND_REPLY: {
             mpv_event_command *cmd = (mpv_event_command *)event->data;
+#ifdef __PS4__
+            if (auto hold = usb_holds.find(event->reply_userdata); hold != usb_holds.end()) {
+                // a loadfile names its playlist entry, whose events end the hold from now on; a
+                // sub-add is done, and so is a loadfile that failed, was dropped or was opened
+                int64_t entry = -1;
+                if (!event->error && hold->second == 0 && cmd->result.format == MPV_FORMAT_NODE_MAP) {
+                    mpv_node_list *list = cmd->result.u.list;
+                    for (int i = 0; i < list->num; i++)
+                        if (std::strcmp(list->keys[i], "playlist_entry_id") == 0 && list->values[i].format == MPV_FORMAT_INT64)
+                            entry = list->values[i].u.int64;
+                }
+                const uint64_t tag = hold->first;
+                if (entry > 0 && entry >= current_entry && entry != loaded_entry)
+                    hold->second = entry;
+                else
+                    releaseUsbEscapes([tag](uint64_t t, int64_t) { return t == tag; });
+            }
+#endif
             if (event->error) {
                 brls::Logger::error("MPVCore => COMMAND ERROR: {}", mpv_error_string(event->error));
                 break;
@@ -917,11 +956,8 @@ void MPVCore::setUrl(const std::string &url, const std::string &extra, const std
     if (!this->mpv) return;
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, url, extra);
 #ifdef __PS4__
-    bool usbEscape = url.rfind("/mnt/usb", 0) == 0;
-    if (usbEscape) {
-        ps4::beginEscape();
-        usb_escapes++;
-    }
+    const bool usb = url.rfind("/mnt/usb", 0) == 0;
+    if (usb) userdata = holdUsbEscape(userdata, 0);
 #endif
     int submitRc;
     if (mpv_client_api_version() >= MPV_MAKE_VERSION(2, 3)) {
@@ -932,7 +968,21 @@ void MPVCore::setUrl(const std::string &url, const std::string &extra, const std
         submitRc = mpv_command_async(this->mpv, userdata, cmd);
     }
 #ifdef __PS4__
-    if (usbEscape && submitRc < 0) releaseUsbEscape();  // never queued: no END_FILE will follow
+    if (usb && submitRc < 0) releaseUsbEscapes([userdata](uint64_t t, int64_t) { return t == userdata; });  // never queued
+#endif
+}
+
+void MPVCore::addSubtitle(const std::string &path, const char *flag, const std::string &title) {
+    if (!this->mpv) return;
+    uint64_t userdata = 0;
+#ifdef __PS4__
+    const bool usb = path.rfind("/mnt/usb", 0) == 0;
+    if (usb) userdata = holdUsbEscape(0, -1);
+#endif
+    const char *cmd[] = {"sub-add", path.c_str(), flag, title.c_str(), nullptr};
+    const int rc = mpv_command_async(this->mpv, userdata, cmd);
+#ifdef __PS4__
+    if (usb && rc < 0) releaseUsbEscapes([userdata](uint64_t t, int64_t) { return t == userdata; });  // never queued
 #endif
 }
 
