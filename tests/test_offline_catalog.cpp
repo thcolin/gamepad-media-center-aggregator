@@ -304,6 +304,31 @@ int main() {
         CHECK(stored.empty());
     }
 
+    // playQueue: downloaded episodes of the same show, in (season, episode)
+    // order, across seasons; other shows and non-downloaded episodes left out
+    {
+        std::vector<plex::Item> eps = {legacyEpisode("s2e1", "Lost", 2, 1), legacyEpisode("s1e3", "Lost", 1, 3),
+            legacyEpisode("s1e1", "Lost", 1, 1), legacyEpisode("s1e2", "Lost", 1, 2),
+            legacyEpisode("o1", "Other", 1, 1), movie("mv", "Heat", "1")};
+        auto tree = offline::synthesizeAncestors(eps);
+        auto downloaded = [](const std::string& k) { return k != "s1e2"; };
+
+        auto q = offline::playQueue(tree, "s1e1", downloaded);
+        CHECK(q.size() == 3);
+        if (q.size() == 3) {
+            CHECK(q[0].ratingKey == "s1e1");
+            CHECK(q[1].ratingKey == "s1e3");
+            CHECK(q[2].ratingKey == "s2e1");
+        }
+        // started from a later episode: same queue, the caller finds its index
+        CHECK(offline::playQueue(tree, "s2e1", downloaded).size() == 3);
+        // a show alone in its queue
+        CHECK(offline::playQueue(tree, "o1", downloaded).size() == 1);
+        // a movie or an unknown key has no queue
+        CHECK(offline::playQueue(tree, "mv", downloaded).empty());
+        CHECK(offline::playQueue(tree, "nope", downloaded).empty());
+    }
+
     if (failures == 0) {
         printf("test_offline_catalog: OK\n");
         return 0;

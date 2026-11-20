@@ -26,6 +26,10 @@ public:
     void dismiss(std::function<void(void)> cb = [] {}) override;
 
     static void play(const std::string& path, const std::string& name = "", const std::string& method = "");
+    /// Plays a downloaded item's local file. An episode is queued with the other
+    /// downloaded episodes of its show, so playback moves on to the next one.
+    /// `name` titles a lone file; queued episodes are titled from the library.
+    static void playDownload(const std::string& ratingKey, const std::string& name);
 
 protected:
     void setContent(RecyclingGrid* view);

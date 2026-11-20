@@ -178,6 +178,21 @@ inline std::vector<plex::Item> leavesOf(const std::vector<plex::Item>& nodes, co
     return out;
 }
 
+/// Downloaded episodes of the show that `episodeKey` belongs to, in play order:
+/// the offline player's queue. Empty when `episodeKey` is not a known episode.
+inline std::vector<plex::Item> playQueue(const std::vector<plex::Item>& nodes, const std::string& episodeKey,
+    const std::function<bool(const std::string&)>& isDownloaded) {
+    std::vector<plex::Item> out;
+    for (const auto& it : nodes) {
+        if (it.ratingKey != episodeKey) continue;
+        if (it.type != plex::mediaTypeEpisode) break;
+        for (auto& ep : leavesOf(nodes, it.grandparentRatingKey))
+            if (isDownloaded(ep.ratingKey)) out.push_back(std::move(ep));
+        break;
+    }
+    return out;
+}
+
 /// ratingKeys to KEEP given which leaves are actually downloaded (predicate).
 /// Prunes movies/clips not downloaded, shows and seasons with no downloaded
 /// episode, and their now-orphaned children; keeps a non-downloaded episode

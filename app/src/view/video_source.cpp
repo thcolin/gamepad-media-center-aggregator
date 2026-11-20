@@ -191,7 +191,7 @@ void VideoDataSource::onItemSelected(brls::Box* recycler, size_t index) {
                                 ? dm.getLocalPath(item.ratingKey)
                                 : "";
         if (!local.empty()) {
-            RemoteView::play(local, fmt::format("S{}E{} - {}", item.parentIndex, item.index, item.title), "Local");
+            RemoteView::playDownload(item.ratingKey, fmt::format("S{}E{} - {}", item.parentIndex, item.index, item.title));
             return;
         }
         PlayerView* view = new PlayerView(item);
