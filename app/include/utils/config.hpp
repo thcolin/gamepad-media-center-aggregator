@@ -68,10 +68,11 @@ struct AppServer {
     // streams included, and kept on a redirect to a CDN; empty keeps the app's own.
     // config.json only.
     std::string user_agent;
-    // the user accepted a certificate GMCA could not verify (self-signed, LAN)
-    bool insecure_tls = false;
+    // origins (misc::urlOrigin) whose certificate GMCA could not verify and the
+    // user accepted (self-signed, LAN); only these skip the check
+    std::vector<std::string> insecure_origins;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AppServer, id, name, access_token, urls, type, addons, user_agent, insecure_tls);
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AppServer, id, name, access_token, urls, type, addons, user_agent, insecure_origins);
 
 struct AppRemote {
     std::string name;
@@ -79,17 +80,18 @@ struct AppRemote {
     std::string user;
     std::string passwd;
     std::string user_agent;
-    bool insecure_tls = false;  // same as AppServer::insecure_tls
+    std::vector<std::string> insecure_origins;  // same as AppServer::insecure_origins
 };
 inline void to_json(nlohmann::json& nlohmann_json_j, const AppRemote& nlohmann_json_t) {
-    if (nlohmann_json_t.insecure_tls) nlohmann_json_j["insecure_tls"] = true;
+    if (!nlohmann_json_t.insecure_origins.empty()) nlohmann_json_j["insecure_origins"] = nlohmann_json_t.insecure_origins;
     if (!nlohmann_json_t.user.empty()) nlohmann_json_j["user"] = nlohmann_json_t.user;
     if (!nlohmann_json_t.passwd.empty()) nlohmann_json_j["passwd"] = nlohmann_json_t.passwd;
     if (!nlohmann_json_t.user_agent.empty()) nlohmann_json_j["user_agent"] = nlohmann_json_t.user_agent;
     NLOHMANN_JSON_EXPAND(NLOHMANN_JSON_PASTE(NLOHMANN_JSON_TO, name, url))
 }
 inline void from_json(const nlohmann::json& nlohmann_json_j, AppRemote& nlohmann_json_t) {
-    if (nlohmann_json_j.contains("insecure_tls")) nlohmann_json_j["insecure_tls"].get_to(nlohmann_json_t.insecure_tls);
+    if (nlohmann_json_j.contains("insecure_origins"))
+        nlohmann_json_j["insecure_origins"].get_to(nlohmann_json_t.insecure_origins);
     if (nlohmann_json_j.contains("user")) nlohmann_json_j["user"].get_to(nlohmann_json_t.user);
     if (nlohmann_json_j.contains("passwd")) nlohmann_json_j["passwd"].get_to(nlohmann_json_t.passwd);
     if (nlohmann_json_j.contains("user_agent")) nlohmann_json_j["user_agent"].get_to(nlohmann_json_t.user_agent);

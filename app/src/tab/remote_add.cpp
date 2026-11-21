@@ -17,6 +17,7 @@
 #include "client/client.hpp"
 #include "utils/dialog.hpp"
 #include "utils/net_error.hpp"
+#include "utils/url_origin.hpp"
 #include "utils/log_redact.hpp"
 #include <curl/curl.h>
 
@@ -291,7 +292,8 @@ void RemoteAdd::submit() {
                     this->submit();
                 });
             } else if (ok) {
-                r.insecure_tls = HTTP::insecure(r.url);
+                r.insecure_origins.clear();
+                if (HTTP::insecure(r.url)) r.insecure_origins.push_back(misc::urlOrigin(r.url));
                 auto& conf = AppConfig::instance();
                 if (this->editIndex < 0)
                     conf.addRemote(r);

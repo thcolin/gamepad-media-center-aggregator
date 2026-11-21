@@ -21,6 +21,7 @@
 #include "utils/config.hpp"
 #include "utils/dialog.hpp"
 #include "utils/net_error.hpp"
+#include "utils/url_origin.hpp"
 
 using namespace brls::literals;
 
@@ -123,7 +124,7 @@ void JellyfinAdd::finish(const std::string& url, const jellyfin::LoginResult& r)
     s.access_token = r.token;
     s.urls.push_back(url);
     s.type = this->type;
-    s.insecure_tls = HTTP::insecure(url);
+    if (HTTP::insecure(url)) s.insecure_origins.push_back(misc::urlOrigin(url));
     AppConfig::instance().addServer(s);
 
     AppUser u;

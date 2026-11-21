@@ -572,11 +572,8 @@ void AppConfig::save() {
 
 void AppConfig::syncInsecureOrigins() {
     std::set<std::string> origins;
-    for (auto& s : this->servers)
-        if (s.insecure_tls)
-            for (auto& u : s.urls) origins.insert(misc::urlOrigin(u));
-    for (auto& r : this->remotes)
-        if (r.insecure_tls) origins.insert(misc::urlOrigin(r.url));
+    for (auto& s : this->servers) origins.insert(s.insecure_origins.begin(), s.insecure_origins.end());
+    for (auto& r : this->remotes) origins.insert(r.insecure_origins.begin(), r.insecure_origins.end());
     HTTP::set_insecure_origins(origins);
 }
 
@@ -766,7 +763,9 @@ bool AppConfig::addServer(const AppServer& s) {
         if (s.id == o.id) {
             if (!s.name.empty()) o.name = s.name;
             if (!s.access_token.empty()) o.access_token = s.access_token;
-            if (s.insecure_tls) o.insecure_tls = true;
+            for (auto& origin : s.insecure_origins)
+                if (std::find(o.insecure_origins.begin(), o.insecure_origins.end(), origin) == o.insecure_origins.end())
+                    o.insecure_origins.push_back(origin);
             this->server_token = o.access_token;
             // remove old url
             for (auto it = o.urls.begin(); it != o.urls.end(); ++it) {
