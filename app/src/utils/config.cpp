@@ -644,6 +644,14 @@ const std::vector<std::string>& AppConfig::getStremioAddons() const {
     return empty;
 }
 
+const std::string& AppConfig::getUserAgent() const {
+    static const std::string empty;
+    if (this->user == this->users.end()) return empty;
+    for (auto& s : this->servers)
+        if (s.id == this->user->server_id) return s.user_agent;
+    return empty;
+}
+
 void AppConfig::setStremioAddons(const std::vector<std::string>& addons) {
     if (this->user == this->users.end()) return;
     for (auto& s : this->servers) {

@@ -1,5 +1,6 @@
 #include "view/audio_player.hpp"
 #include "view/mpv_core.hpp"
+#include "view/mpv_options.hpp"
 #include "api/backend.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
@@ -142,7 +143,10 @@ void AudioPlayer::resolveAndPlay(const media::Item& track) {
                     brls::Application::notify("main/player/error"_i18n);
                     return;
                 }
-                MPVCore::instance().setUrl(src.url, src.mpvExtra);
+                std::string extra = src.mpvExtra;
+                const std::string& ua = AppConfig::instance().getUserAgent();
+                if (!ua.empty()) extra = mpvopt::add(extra, "user-agent", ua);
+                MPVCore::instance().setUrl(src.url, extra);
             });
         } catch (const std::exception& ex) {
             std::string msg = ex.what();

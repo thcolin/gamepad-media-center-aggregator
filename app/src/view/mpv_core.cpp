@@ -175,8 +175,8 @@ void MPVCore::init() {
     mpv_set_option_string(mpv, "gpu-shader-cache-dir", fmt::format("{}/cache", confDir).c_str());
     mpv_set_option_string(mpv, "ytdl", "no");
     mpv_set_option_string(mpv, "referrer", conf.getUrl().c_str());
-    // the app's own User-Agent instead of ffmpeg's "Lavf/..."; per-remote
-    // overrides (client.cpp) still win as loadfile options
+    // the app's own User-Agent instead of ffmpeg's "Lavf/..."; the per-remote
+    // and per-server `user_agent` still win as loadfile options
     mpv_set_option_string(mpv, "user-agent", HTTP::default_user_agent().c_str());
     mpv_set_option_string(mpv, "osd-level", "0");
     mpv_set_option_string(mpv, "video-timing-offset", "0");  // 60fps

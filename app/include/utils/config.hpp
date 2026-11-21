@@ -64,8 +64,12 @@ struct AppServer {
     // Stremio only: transport URLs (…/manifest.json) of the installed addons,
     // either entered manually or synced from the account's addon collection.
     std::vector<std::string> addons;
+    // User-Agent of the media requests mpv sends for this server, Stremio's addon
+    // streams included, and kept on a redirect to a CDN; empty keeps the app's own.
+    // config.json only.
+    std::string user_agent;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AppServer, id, name, access_token, urls, type, addons);
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AppServer, id, name, access_token, urls, type, addons, user_agent);
 
 struct AppRemote {
     std::string name;
@@ -245,6 +249,8 @@ public:
     /// Stremio only: replace the active server's addon list (after an account
     /// collection re-sync) and persist. No-op when unchanged or not logged in.
     void setStremioAddons(const std::vector<std::string>& addons);
+    /// `user_agent` of the active server, empty when unset or not logged in.
+    const std::string& getUserAgent() const;
     /// Active media backend (built lazily from the active server's type).
     /// The UI talks to this; it never formats a provider URL itself.
     media::Backend& backend();
