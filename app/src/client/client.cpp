@@ -36,7 +36,7 @@ void Client::init(const AppRemote& conf, HTTP& cilent) {
         cilent.set_basic_auth(conf.user, conf.passwd);
     }
     if (conf.user_agent.size() > 0) {
-        ssextra << fmt::format(",user_agent=\"{}\"", conf.user_agent);
+        ssextra << fmt::format(",user-agent=%{}%{}", conf.user_agent.size(), conf.user_agent);
         cilent.set_user_agent(conf.user_agent);
     }
     this->extra = ssextra.str();
