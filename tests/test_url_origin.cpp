@@ -8,6 +8,8 @@
 #include <string>
 #include <utils/url_origin.hpp>
 
+using misc::isPrivateAddress;
+using misc::plexDirectIp;
 using misc::urlOrigin;
 
 static int failures = 0;
@@ -44,6 +46,23 @@ int main() {
     CHECK_EQ(urlOrigin("not a url"), "");
     CHECK_EQ(urlOrigin("://host"), "");
     CHECK_EQ(urlOrigin("https:///path"), "");
+
+    CHECK_EQ(plexDirectIp("https://192-168-1-14.b89b5697550547f183347aed4fbc613f.plex.direct:32400/library"),
+        "192.168.1.14");
+    CHECK_EQ(plexDirectIp("https://82-64-10-3.ABCDEF.Plex.Direct:8443"), "82.64.10.3");
+    CHECK_EQ(plexDirectIp("https://192-168-1-14.hash.plex.direct.evil.example/"), "");
+    CHECK_EQ(plexDirectIp("https://plex.direct/"), "");
+    CHECK_EQ(plexDirectIp("https://300-1-1-1.hash.plex.direct/"), "");
+    CHECK_EQ(plexDirectIp("https://1-2-3.hash.plex.direct/"), "");
+    CHECK_EQ(plexDirectIp("https://1-2-3-4x.hash.plex.direct/"), "");
+    CHECK_EQ(plexDirectIp("https://192.168.1.14:32400/"), "");
+    CHECK_EQ(plexDirectIp("http://user@10-0-0-2.h.plex.direct:32400/"), "10.0.0.2");
+
+    CHECK_EQ(isPrivateAddress("192.168.1.14") ? "private" : "public", "private");
+    CHECK_EQ(isPrivateAddress("100.100.1.1") ? "private" : "public", "private");
+    CHECK_EQ(isPrivateAddress("fd7a::1") ? "private" : "public", "private");
+    CHECK_EQ(isPrivateAddress("82.64.10.3") ? "private" : "public", "public");
+    CHECK_EQ(isPrivateAddress("172.32.0.1") ? "private" : "public", "public");
 
     if (failures) {
         printf("%d failure(s)\n", failures);

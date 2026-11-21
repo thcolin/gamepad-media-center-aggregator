@@ -142,8 +142,11 @@ HTTP::HTTP() : chunk(nullptr) {
     // enable all supported built-in compressions
     curl_easy_setopt(this->easy, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(this->easy, CURLOPT_VERBOSE, 0L);
-#if !defined(_WIN32) && !defined(__SWITCH2__)
-    // Windows (SChannel) and Switch 2 (libnx) curl verify against the system's store
+#if defined(_WIN32)
+    // SChannel verifies against the Windows store; an unreachable revocation server must not fail the request
+    curl_easy_setopt(this->easy, CURLOPT_SSL_OPTIONS, CURLSSLOPT_REVOKE_BEST_EFFORT);
+#elif !defined(__SWITCH2__)
+    // Switch 2 (libnx) curl verifies against the console's store
     curl_easy_setopt(this->easy, CURLOPT_CAINFO, ca_file().c_str());
 #endif
     // Every request runs from a background thread (ThreadPool / brls::async), so
@@ -160,6 +163,7 @@ HTTP::HTTP() : chunk(nullptr) {
 
 HTTP::~HTTP() {
     if (this->chunk != nullptr) curl_slist_free_all(this->chunk);
+    if (this->connect_to != nullptr) curl_slist_free_all(this->connect_to);
     if (this->easy != nullptr) curl_easy_cleanup(this->easy);
 }
 
@@ -202,8 +206,9 @@ void HTTP::allow_insecure(const std::string& url) {
 }
 
 bool HTTP::insecure(const std::string& url) {
+    std::string origin = misc::urlOrigin(url);
     std::lock_guard<std::mutex> lock(insecure_lock);
-    return insecure_origins.count(misc::urlOrigin(url)) > 0;
+    return !origin.empty() && insecure_origins.count(origin) > 0;
 }
 
 void HTTP::set_user_agent(const std::string& agent) { curl_easy_setopt(this->easy, CURLOPT_USERAGENT, agent.c_str()); }
@@ -303,6 +308,19 @@ int HTTP::perform(std::string url, std::ostream* body) {
         bool verify = !insecure(url);
         curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYPEER, verify ? 1L : 0L);
         curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYHOST, verify ? 2L : 0L);
+        // a plex.direct name is reached at the address it names, without DNS: a
+        // router's DNS-rebinding protection refuses it for a LAN server, and the
+        // certificate is still checked against the name
+        curl_slist_free_all(this->connect_to);
+        this->connect_to = nullptr;
+        std::string ip = misc::plexDirectIp(url);
+        if (!ip.empty()) {
+            std::string origin = misc::urlOrigin(url);
+            size_t hostStart = origin.find("://") + 3, colon = origin.rfind(':');
+            std::string host = origin.substr(hostStart, colon - hostStart), port = origin.substr(colon + 1);
+            this->connect_to = curl_slist_append(nullptr, fmt::format("{}:{}:{}:{}", host, port, ip, port).c_str());
+        }
+        curl_easy_setopt(this->easy, CURLOPT_CONNECT_TO, this->connect_to);
         curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
         CURLcode res = curl_easy_perform(this->easy);
         if (res != CURLE_OK) throw curl_error(res);
@@ -319,6 +337,9 @@ int HTTP::perform(std::string url, std::ostream* body) {
         if (origin.rfind("http://", 0) != 0 && origin.rfind("https://", 0) != 0)
             throw curl_error("redirect to an unsupported url");
         if (origin != misc::urlOrigin(url)) {
+            // a 307/308 would send the body (a login form) to the other server as well
+            if (this->body_method && (status_code == 307 || status_code == 308))
+                throw curl_error("redirect of a request with a body to another server");
             curl_easy_setopt(this->easy, CURLOPT_HTTPHEADER, nullptr);
             curl_easy_setopt(this->easy, CURLOPT_COOKIE, nullptr);
             curl_easy_setopt(this->easy, CURLOPT_USERNAME, nullptr);

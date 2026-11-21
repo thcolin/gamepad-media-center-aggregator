@@ -165,6 +165,7 @@ private:
     struct curl_slist* chunk;
     Cancel is_cancel;
     Progress event;
+    struct curl_slist* connect_to = nullptr;
     std::ostream* body = nullptr;
     bool body_method = false;
     std::string cookie, user, passwd;

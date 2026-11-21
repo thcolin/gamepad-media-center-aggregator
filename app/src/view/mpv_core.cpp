@@ -7,6 +7,7 @@
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
 #include "utils/log_redact.hpp"
+#include "utils/url_origin.hpp"
 #ifdef __PS4__
 #include "utils/ps4_escape.hpp"
 #endif
@@ -919,11 +920,20 @@ void MPVCore::reset() {
     setFrameSize(rect);
 }
 
-void MPVCore::setUrl(const std::string &url, const std::string &extraOptions, const std::string &method,
+void MPVCore::setUrl(const std::string &rawUrl, const std::string &extraOptions, const std::string &method,
     uint64_t userdata) {
     if (!this->mpv) return;
-    std::string extra = extraOptions;
-    if (HTTP::insecure(url)) extra += extra.empty() ? "tls-verify=no" : ",tls-verify=no";
+    std::string url = rawUrl, extra = extraOptions;
+    bool verify = !HTTP::insecure(url);
+    // ffmpeg cannot reach a LAN plex.direct name behind DNS-rebinding protection
+    // nor verify its certificate on the bare address (HTTP::perform does both)
+    std::string ip = misc::plexDirectIp(url);
+    if (!ip.empty() && misc::isPrivateAddress(ip)) {
+        size_t hostStart = url.find("://") + 3;
+        url.replace(hostStart, url.find_first_of(":/?#", hostStart) - hostStart, ip);
+        verify = false;
+    }
+    if (!verify) extra += extra.empty() ? "tls-verify=no" : ",tls-verify=no";
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, misc::redactUrl(url), misc::redactUrl(extra));
 #ifdef __PS4__
     bool usbEscape = url.rfind("/mnt/usb", 0) == 0;

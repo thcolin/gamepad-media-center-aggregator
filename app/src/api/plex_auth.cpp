@@ -6,6 +6,7 @@
 #include "api/plex/auth.hpp"
 #include "api/plex.hpp"
 #include "utils/thread.hpp"
+#include "utils/url_origin.hpp"
 #include <cctype>
 #include <cstdio>
 #include <condition_variable>
@@ -20,27 +21,6 @@ namespace plex {
 /// directly (raw IP, bypassing plex.direct) so a LAN/VPN server stays reachable
 /// (GH #3). Public addresses gain nothing — plex.direct resolves to the same IP.
 /// IPv6 link-local (fe80::) and unspecified (::) are filtered by the caller.
-static bool isPrivateAddress(const std::string& address) {
-    unsigned a, b, c, d;
-    char tail;
-    if (std::sscanf(address.c_str(), "%u.%u.%u.%u%c", &a, &b, &c, &d, &tail) == 4 && a <= 255 && b <= 255 &&
-        c <= 255 && d <= 255) {
-        if (a == 0 || a == 10 || a == 127) return true;     // this-host, RFC1918 /8, loopback
-        if (a == 100 && b >= 64 && b <= 127) return true;   // CGNAT 100.64/10 (Tailscale)
-        if (a == 169 && b == 254) return true;              // link-local 169.254/16
-        if (a == 172 && b >= 16 && b <= 31) return true;    // RFC1918 172.16/12
-        if (a == 192 && b == 168) return true;              // RFC1918 192.168/16
-        return false;
-    }
-    if (address.find(':') != std::string::npos) {  // IPv6
-        if (address == "::1") return true;          // loopback
-        char p0 = (char)std::tolower((unsigned char)address[0]);
-        char p1 = address.size() > 1 ? (char)std::tolower((unsigned char)address[1]) : '\0';
-        if (p0 == 'f' && (p1 == 'c' || p1 == 'd')) return true;  // ULA fc00::/7 (incl. Tailscale fd7a::)
-    }
-    return false;
-}
-
 /// Runs `fn` against the primary API (clients.plex.tv) then retries on
 /// plex.tv in case of transient failure.
 template <typename Fn>
@@ -228,21 +208,15 @@ std::vector<std::string> rankConnections(const ServerResource& server) {
         // Advertised URI: a plex.direct hostname for local/remote https servers.
         add(c.uri, c.protocol, c.local, c.relay);
 
-        // For private/CGNAT/ULA addresses, also probe the raw address:port: the
-        // plex.direct alias of a non-public IP is refused by DNS-rebinding
-        // protection, so the LAN/VPN server looks "unreachable" even though it
-        // answers directly (GH #3). The official clients hit the raw LAN IP too.
-        // TLS verification is disabled (http.cpp) so the plex.direct cert is
-        // accepted on the bare IP. Public addresses (remote/relay) are skipped:
-        // their plex.direct alias resolves to the same IP, so a raw probe only
-        // lengthens the sequential candidate list.
-        if (isPrivateAddress(c.address)) {
+        // DNS-rebinding protection refuses the plex.direct alias of a private
+        // address (GH #3); HTTP connects to the address the alias names without
+        // DNS (misc::plexDirectIp), so the https URI above still works. For
+        // private addresses, also try plain HTTP on the raw address:port, for
+        // servers that serve it (Secure connections != "Required").
+        if (misc::isPrivateAddress(c.address)) {
             bool ipv6 = c.address.find(':') != std::string::npos;
             std::string host = ipv6 ? fmt::format("[{}]", c.address) : c.address;
-            add(fmt::format("{}://{}:{}", c.protocol, host, c.port), c.protocol, c.local, c.relay);
-            // Plain-HTTP fallback for servers that only serve HTTP on the LAN IP
-            // (Secure connections != "Required").
-            if (c.protocol == "https") add(fmt::format("http://{}:{}", host, c.port), "http", c.local, c.relay);
+            add(fmt::format("http://{}:{}", host, c.port), "http", c.local, c.relay);
         }
     }
 
