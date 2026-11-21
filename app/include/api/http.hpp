@@ -131,7 +131,7 @@ private:
     static size_t easy_write_cb(char* ptr, size_t size, size_t nmemb, void* userdata);
     static int easy_progress_cb(
         void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow);
-    int perform(std::ostream* body);
+    int perform(std::string url, std::ostream* body);
 
     void add_header(const std::string& header);
     void set_option(const Header& hs);
@@ -156,4 +156,7 @@ private:
     struct curl_slist* chunk;
     Cancel is_cancel;
     Progress event;
+    std::ostream* body = nullptr;
+    bool body_method = false;
+    std::string cookie, user, passwd;
 };

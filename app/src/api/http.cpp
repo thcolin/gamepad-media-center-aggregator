@@ -1,5 +1,6 @@
 #include "api/http.hpp"
 #include "utils/config.hpp"
+#include "utils/url_origin.hpp"
 #include <borealis/core/logger.hpp>
 #include <curl/curl.h>
 #include <mutex>
@@ -131,7 +132,6 @@ HTTP::HTTP() : chunk(nullptr) {
     global.init_lock.unlock();
 
     curl_easy_setopt(this->easy, CURLOPT_USERAGENT, user_agent.c_str());
-    curl_easy_setopt(this->easy, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(this->easy, CURLOPT_SHARE, global.share);
     // enable all supported built-in compressions
     curl_easy_setopt(this->easy, CURLOPT_ACCEPT_ENCODING, "");
@@ -213,33 +213,71 @@ void HTTP::set_option(const Cookies& cookies) {
         }
         ss << "; ";
     }
-    curl_easy_setopt(this->easy, CURLOPT_COOKIE, ss.str().c_str());
+    this->cookie = ss.str();
 }
 
 void HTTP::set_basic_auth(const std::string& user, const std::string& passwd) {
     curl_easy_setopt(this->easy, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-    curl_easy_setopt(this->easy, CURLOPT_USERNAME, user.c_str());
-    curl_easy_setopt(this->easy, CURLOPT_PASSWORD, passwd.c_str());
+    this->user = user;
+    this->passwd = passwd;
 }
 
+static bool is_redirect(long code) { return code == 301 || code == 302 || code == 303 || code == 307 || code == 308; }
+
 size_t HTTP::easy_write_cb(char* ptr, size_t size, size_t nmemb, void* userdata) {
-    std::ostream* ctx = reinterpret_cast<std::ostream*>(userdata);
+    HTTP* ctx = reinterpret_cast<HTTP*>(userdata);
     size_t count = size * nmemb;
-    ctx->write(ptr, count);
+    // the body of a redirect is not the answer, perform() follows it
+    long code = 0;
+    curl_easy_getinfo(ctx->easy, CURLINFO_RESPONSE_CODE, &code);
+    if (!is_redirect(code)) ctx->body->write(ptr, count);
     return count;
 }
 
-int HTTP::perform(std::ostream* body) {
+/// libcurl sends the custom headers (X-Plex-Token, X-Emby-Token...) to whatever
+/// host a redirect points at, so redirects are followed here: once the origin
+/// changes, the request goes on without its headers, cookies or credentials.
+int HTTP::perform(std::string url, std::ostream* body) {
+    constexpr int max_redirects = 10;
+    this->body = body;
     curl_easy_setopt(this->easy, CURLOPT_WRITEFUNCTION, easy_write_cb);
-    curl_easy_setopt(this->easy, CURLOPT_WRITEDATA, body);
+    curl_easy_setopt(this->easy, CURLOPT_WRITEDATA, this);
     curl_easy_setopt(this->easy, CURLOPT_PROXY, PROXY_STATUS ? PROXY.c_str() : nullptr);
+    // a handle is reused across requests: restore what a previous redirect dropped
+    curl_easy_setopt(this->easy, CURLOPT_HTTPHEADER, this->chunk);
+    curl_easy_setopt(this->easy, CURLOPT_COOKIE, this->cookie.empty() ? nullptr : this->cookie.c_str());
+    curl_easy_setopt(this->easy, CURLOPT_USERNAME, this->user.empty() ? nullptr : this->user.c_str());
+    curl_easy_setopt(this->easy, CURLOPT_PASSWORD, this->user.empty() ? nullptr : this->passwd.c_str());
 
-    CURLcode res = curl_easy_perform(this->easy);
-    if (res != CURLE_OK) throw curl_error(res);
+    for (int hops = 0;; ++hops) {
+        curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
+        CURLcode res = curl_easy_perform(this->easy);
+        if (res != CURLE_OK) throw curl_error(res);
 
-    long status_code = 0;
-    curl_easy_getinfo(this->easy, CURLINFO_RESPONSE_CODE, &status_code);
-    return status_code;
+        long status_code = 0;
+        char* location = nullptr;
+        curl_easy_getinfo(this->easy, CURLINFO_RESPONSE_CODE, &status_code);
+        curl_easy_getinfo(this->easy, CURLINFO_REDIRECT_URL, &location);
+        if (!is_redirect(status_code) || !location) return status_code;
+        std::string next = location;
+
+        if (hops == max_redirects) throw curl_error("too many redirects");
+        std::string origin = misc::urlOrigin(next);
+        if (origin.rfind("http://", 0) != 0 && origin.rfind("https://", 0) != 0)
+            throw curl_error("redirect to an unsupported url");
+        if (origin != misc::urlOrigin(url)) {
+            curl_easy_setopt(this->easy, CURLOPT_HTTPHEADER, nullptr);
+            curl_easy_setopt(this->easy, CURLOPT_COOKIE, nullptr);
+            curl_easy_setopt(this->easy, CURLOPT_USERNAME, nullptr);
+            curl_easy_setopt(this->easy, CURLOPT_PASSWORD, nullptr);
+        }
+        // what libcurl does by default: 303, and 301/302 after a POST, go on as GET
+        if (status_code == 303 || ((status_code == 301 || status_code == 302) && this->body_method)) {
+            curl_easy_setopt(this->easy, CURLOPT_CUSTOMREQUEST, nullptr);
+            curl_easy_setopt(this->easy, CURLOPT_HTTPGET, 1L);
+        }
+        url = next;
+    }
 }
 
 std::string HTTP::encode_form(const Form& form) {
@@ -256,44 +294,44 @@ std::string HTTP::encode_form(const Form& form) {
 }
 
 void HTTP::_get(const std::string& url, std::ostream* out) {
-    curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(this->easy, CURLOPT_HTTPGET, 1L);
-    int code = this->perform(out);
+    this->body_method = false;
+    int code = this->perform(url, out);
     if (code >= 400) throw curl_error(fmt::format("http status {}", code));
 }
 
 bool HTTP::getinfo(char** arg) { return curl_easy_getinfo(this->easy, CURLINFO_CONTENT_TYPE, arg) == CURLE_OK; }
 
 int HTTP::propfind(const std::string& url, std::ostream* out) {
-    curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(this->easy, CURLOPT_CUSTOMREQUEST, "PROPFIND");
-    return this->perform(out);
+    this->body_method = false;
+    return this->perform(url, out);
 }
 
 std::string HTTP::_post(const std::string& url, const std::string& data) {
     std::ostringstream body;
-    curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(this->easy, CURLOPT_POSTFIELDS, data.c_str());
     curl_easy_setopt(this->easy, CURLOPT_POSTFIELDSIZE, data.size());
-    int code = this->perform(&body);
+    this->body_method = true;
+    int code = this->perform(url, &body);
     if (code >= 400) throw curl_error(fmt::format("http status {}", code));
     return body.str();
 }
 
 std::string HTTP::_put(const std::string& url, const std::string& data) {
     std::ostringstream body;
-    curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(this->easy, CURLOPT_POSTFIELDS, data.c_str());
     curl_easy_setopt(this->easy, CURLOPT_POSTFIELDSIZE, data.size());
     curl_easy_setopt(this->easy, CURLOPT_CUSTOMREQUEST, "PUT");
-    int code = this->perform(&body);
+    this->body_method = true;
+    int code = this->perform(url, &body);
     if (code >= 400) throw curl_error(fmt::format("http status {}", code));
     return body.str();
 }
 
 void HTTP::_delete(const std::string& url, std::ostream* out) {
-    curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
     curl_easy_setopt(this->easy, CURLOPT_CUSTOMREQUEST, "DELETE");
-    int code = this->perform(out);
+    this->body_method = false;
+    int code = this->perform(url, out);
     if (code >= 400) throw curl_error(fmt::format("http status {}", code));
 }
