@@ -915,7 +915,7 @@ void MPVCore::reset() {
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method, uint64_t userdata) {
     if (!this->mpv) return;
-    brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, url, extra);
+    brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, misc::redactUrl(url), misc::redactUrl(extra));
 #ifdef __PS4__
     bool usbEscape = url.rfind("/mnt/usb", 0) == 0;
     if (usbEscape) {

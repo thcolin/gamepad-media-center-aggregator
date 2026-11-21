@@ -23,6 +23,7 @@
 #include "api/stremio/auth.hpp"
 #include "api/media/langs.hpp"
 #include "utils/config.hpp"
+#include "utils/log_redact.hpp"
 #include <borealis/core/logger.hpp>
 #include <borealis/core/thread.hpp>
 #include <borealis/core/i18n.hpp>
@@ -219,7 +220,7 @@ std::vector<media::Media> resolveAllStreams(
         try {
             streams = parseStreams(getSync(url, 15000));
         } catch (const std::exception& ex) {
-            brls::Logger::warning("stremio stream {}: {}", url, ex.what());
+            brls::Logger::warning("stremio stream {}: {}", misc::redactLogLine(url), ex.what());
             continue;
         }
         for (auto& s : streams) all.push_back(streamToMedia(s, a.manifest.name));
@@ -280,7 +281,7 @@ std::vector<media::Stream> resolveAllSubtitles(
         try {
             subs = parseSubtitles(getSync(url, 15000));
         } catch (const std::exception& ex) {
-            brls::Logger::warning("stremio subtitles {}: {}", url, ex.what());
+            brls::Logger::warning("stremio subtitles {}: {}", misc::redactLogLine(url), ex.what());
             continue;
         }
         for (auto& s : subs) {
@@ -397,7 +398,7 @@ void StremioBackend::getHomeHubs(
                 try {
                     res = parseCatalog(getSync(url));
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio home catalog {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio home catalog {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 if (res.items.empty()) continue;
@@ -437,7 +438,7 @@ void StremioBackend::getSectionHubs(
                 try {
                     res = parseCatalog(getSync(url));
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio section hub {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio section hub {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 if (res.items.empty()) continue;
@@ -586,7 +587,7 @@ void StremioBackend::getItemDetail(
                 try {
                     j = getSync(url);
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio meta {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio meta {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 auto meta = j.find("meta");
@@ -666,7 +667,7 @@ void StremioBackend::getChildren(
                 try {
                     j = getSync(url);
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio meta {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio meta {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 auto meta = j.find("meta");
@@ -739,7 +740,7 @@ void StremioBackend::getAllEpisodes(const std::string& showId, bool,
                 try {
                     j = getSync(url);
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio meta {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio meta {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 auto meta = j.find("meta");
@@ -778,7 +779,7 @@ void StremioBackend::getNextUp(
                 try {
                     j = getSync(url);
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio getNextUp meta {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio getNextUp meta {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 auto meta = j.find("meta");
@@ -838,7 +839,7 @@ void StremioBackend::search(const std::string& query, media::MediaKind kind, int
                 try {
                     res = parseCatalog(getSync(url));
                 } catch (const std::exception& ex) {
-                    brls::Logger::warning("stremio search {}: {}", url, ex.what());
+                    brls::Logger::warning("stremio search {}: {}", misc::redactLogLine(url), ex.what());
                     continue;
                 }
                 for (auto& it : res.items) {

@@ -1,5 +1,6 @@
 #include "utils/image.hpp"
 #include "utils/thread.hpp"
+#include "utils/log_redact.hpp"
 #include <fstream>
 #include <fmt/format.h>
 #include <borealis/core/cache_helper.hpp>
@@ -343,7 +344,7 @@ void Image::doRequest(HTTP& s) {
         (void)hasAlpha;
 #endif
 
-        brls::Logger::verbose("request Image {} size {}", urlCopy, data.size());
+        brls::Logger::verbose("request Image {} size {}", misc::redactUrl(urlCopy), data.size());
         brls::sync([imagePtr, urlCopy, isCancelCopy, imageData, imageW, imageH, isWebp, imageFlags, texBytes] {
             if (!isCancelCopy->load()) {
                 // Load texture
@@ -370,7 +371,7 @@ void Image::doRequest(HTTP& s) {
             }
         });
     } catch (const std::exception& ex) {
-        brls::Logger::warning("request image {} {}", this->url, ex.what());
+        brls::Logger::warning("request image {} {}", misc::redactUrl(this->url), ex.what());
         auto* imagePtr = this->image.load();
         brls::sync([imagePtr] { Image::clear(imagePtr); });
     }
