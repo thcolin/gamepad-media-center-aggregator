@@ -211,9 +211,9 @@ std::vector<std::string> rankConnections(const ServerResource& server) {
         // DNS-rebinding protection refuses the plex.direct alias of a private
         // address (GH #3); HTTP connects to the address the alias names without
         // DNS (misc::plexDirectIp), so the https URI above still works. For
-        // private addresses, also try plain HTTP on the raw address:port, for
-        // servers that serve it (Secure connections != "Required").
-        if (misc::isPrivateAddress(c.address)) {
+        // private addresses, also try plain HTTP on the raw address:port, unless
+        // the owner requires secure connections.
+        if (misc::isPrivateAddress(c.address) && !server.httpsRequired) {
             bool ipv6 = c.address.find(':') != std::string::npos;
             std::string host = ipv6 ? fmt::format("[{}]", c.address) : c.address;
             add(fmt::format("http://{}:{}", host, c.port), "http", c.local, c.relay);

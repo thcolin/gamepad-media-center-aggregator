@@ -213,6 +213,7 @@ struct ServerResource {
     std::string clientIdentifier;  // machine id of the server
     std::string accessToken;       // token SPECIFIC to this server (!= account token)
     bool owned = true;
+    bool httpsRequired = false;  // the owner set "Secure connections" to Required
     std::vector<Connection> connections;
 };
 inline void from_json(const nlohmann::json& j, ServerResource& r) {
@@ -220,6 +221,7 @@ inline void from_json(const nlohmann::json& j, ServerResource& r) {
     r.clientIdentifier = jstr(j, "clientIdentifier");
     r.accessToken = jstr(j, "accessToken");
     r.owned = jbool(j, "owned", true);
+    r.httpsRequired = jbool(j, "httpsRequired", false);
     if (j.contains("connections") && j["connections"].is_array())
         r.connections = j["connections"].get<std::vector<Connection>>();
 }

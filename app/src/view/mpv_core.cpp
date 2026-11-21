@@ -924,16 +924,18 @@ void MPVCore::setUrl(const std::string &rawUrl, const std::string &extraOptions,
     uint64_t userdata) {
     if (!this->mpv) return;
     std::string url = rawUrl, extra = extraOptions;
-    bool verify = !HTTP::insecure(url);
-    // ffmpeg cannot reach a LAN plex.direct name behind DNS-rebinding protection
-    // nor verify its certificate on the bare address (HTTP::perform does both)
+    auto addOption = [&extra](const std::string &option) { extra += (extra.empty() ? "" : ",") + option; };
+    if (HTTP::insecure(url)) addOption("tls-verify=no");
+    // a LAN plex.direct name is refused by DNS-rebinding protection: open its
+    // address and verify the certificate against the name (HTTP::perform does
+    // the same with CURLOPT_CONNECT_TO)
     std::string ip = misc::plexDirectIp(url);
     if (!ip.empty() && misc::isPrivateAddress(ip)) {
         size_t hostStart = url.find("://") + 3;
-        url.replace(hostStart, url.find_first_of(":/?#", hostStart) - hostStart, ip);
-        verify = false;
+        size_t hostEnd = url.find_first_of(":/?#", hostStart);
+        addOption("stream-lavf-o-append=verifyhost=" + url.substr(hostStart, hostEnd - hostStart));
+        url.replace(hostStart, hostEnd - hostStart, ip);
     }
-    if (!verify) extra += extra.empty() ? "tls-verify=no" : ",tls-verify=no";
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, misc::redactUrl(url), misc::redactUrl(extra));
 #ifdef __PS4__
     bool usbEscape = url.rfind("/mnt/usb", 0) == 0;
