@@ -363,7 +363,10 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
                 // (Plex); empty for direct play or backends without a server
                 // transcode session, leaving stopTranscode a safe no-op.
                 this->transcodeSession = src.transcodeSession;
-                MPVCore::instance().setUrl(src.url, src.mpvExtra);
+                std::string extra = src.mpvExtra;
+                const std::string& ua = AppConfig::instance().getUserAgent();
+                if (!ua.empty()) extra += fmt::format(",user-agent=%{}%{}", ua.size(), ua);
+                MPVCore::instance().setUrl(src.url, extra);
             });
         } catch (const std::exception& ex) {
             std::string msg = ex.what();

@@ -142,7 +142,10 @@ void AudioPlayer::resolveAndPlay(const media::Item& track) {
                     brls::Application::notify("main/player/error"_i18n);
                     return;
                 }
-                MPVCore::instance().setUrl(src.url, src.mpvExtra);
+                std::string extra = src.mpvExtra;
+                const std::string& ua = AppConfig::instance().getUserAgent();
+                if (!ua.empty()) extra += fmt::format(",user-agent=%{}%{}", ua.size(), ua);
+                MPVCore::instance().setUrl(src.url, extra);
             });
         } catch (const std::exception& ex) {
             std::string msg = ex.what();
