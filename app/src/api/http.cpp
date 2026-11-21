@@ -1,6 +1,10 @@
 #include "api/http.hpp"
 #include "utils/config.hpp"
 #include "utils/url_origin.hpp"
+#include "utils/atomic_file.hpp"
+#ifdef USE_LIBROMFS
+#include <romfs/romfs.hpp>
+#endif
 #include <borealis/core/logger.hpp>
 #include <curl/curl.h>
 #include <mutex>
@@ -73,7 +77,9 @@ char __attribute__((optimize("no-optimize-sibling-calls"))) * sce_strdup(const c
 #endif
 
 static HTTP::Error curl_error(CURLcode code) {
-    auto kind = code == CURLE_COULDNT_RESOLVE_HOST ? HTTP::ErrorKind::ResolveFailed : HTTP::ErrorKind::Other;
+    auto kind = code == CURLE_COULDNT_RESOLVE_HOST        ? HTTP::ErrorKind::ResolveFailed
+                : code == CURLE_PEER_FAILED_VERIFICATION ? HTTP::ErrorKind::CertificateUntrusted
+                                                         : HTTP::ErrorKind::Other;
     return HTTP::Error(kind, curl_easy_strerror(code));
 }
 static HTTP::Error curl_error(const std::string& arg) { return HTTP::Error(HTTP::ErrorKind::Other, arg); }
@@ -136,8 +142,10 @@ HTTP::HTTP() : chunk(nullptr) {
     // enable all supported built-in compressions
     curl_easy_setopt(this->easy, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(this->easy, CURLOPT_VERBOSE, 0L);
-    curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYHOST, 0L);
+#if !defined(_WIN32) && !defined(__SWITCH2__)
+    // Windows (SChannel) and Switch 2 (libnx) curl verify against the system's store
+    curl_easy_setopt(this->easy, CURLOPT_CAINFO, ca_file().c_str());
+#endif
     // Every request runs from a background thread (ThreadPool / brls::async), so
     // libcurl must never reach for SIGALRM to time out a name resolve — signals
     // only work on the main thread and are unsafe multi-threaded (curl docs:
@@ -156,6 +164,47 @@ HTTP::~HTTP() {
 }
 
 const std::string& HTTP::default_user_agent() { return user_agent; }
+
+const std::string& HTTP::ca_file() {
+    static const std::string path = [] {
+#ifdef USE_LIBROMFS
+        // the resources are embedded in the binary: write the bundle out once
+        std::string out = AppConfig::instance().configDir() + "/cacert.pem";
+        try {
+            auto& res = romfs::get("cacert.pem");
+            std::string bundle(reinterpret_cast<const char*>(res.data()), res.size()), current;
+            if (!AtomicFile::read(out, current) || current != bundle) {
+                fs::create_directories(AtomicFile::toPath(AppConfig::instance().configDir()));
+                AtomicFile::write(out, bundle);
+            }
+        } catch (const std::exception& ex) {
+            brls::Logger::error("cannot write the CA bundle to {}: {}", out, ex.what());
+        }
+        return out;
+#else
+        return std::string(BRLS_RESOURCES) + "cacert.pem";
+#endif
+    }();
+    return path;
+}
+
+static std::mutex insecure_lock;
+static std::set<std::string> insecure_origins;
+
+void HTTP::set_insecure_origins(std::set<std::string> origins) {
+    std::lock_guard<std::mutex> lock(insecure_lock);
+    insecure_origins = std::move(origins);
+}
+
+void HTTP::allow_insecure(const std::string& url) {
+    std::lock_guard<std::mutex> lock(insecure_lock);
+    insecure_origins.insert(misc::urlOrigin(url));
+}
+
+bool HTTP::insecure(const std::string& url) {
+    std::lock_guard<std::mutex> lock(insecure_lock);
+    return insecure_origins.count(misc::urlOrigin(url)) > 0;
+}
 
 void HTTP::set_user_agent(const std::string& agent) { curl_easy_setopt(this->easy, CURLOPT_USERAGENT, agent.c_str()); }
 
@@ -250,6 +299,10 @@ int HTTP::perform(std::string url, std::ostream* body) {
     curl_easy_setopt(this->easy, CURLOPT_PASSWORD, this->user.empty() ? nullptr : this->passwd.c_str());
 
     for (int hops = 0;; ++hops) {
+        // checked at each hop: a redirect can leave the server the user allowed
+        bool verify = !insecure(url);
+        curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYPEER, verify ? 1L : 0L);
+        curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYHOST, verify ? 2L : 0L);
         curl_easy_setopt(this->easy, CURLOPT_URL, url.c_str());
         CURLcode res = curl_easy_perform(this->easy);
         if (res != CURLE_OK) throw curl_error(res);

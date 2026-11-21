@@ -112,9 +112,26 @@ to `ci-deps` on manual dispatch. It never replaces an existing file: bump
 `pkgrel` in `scripts/vita/curl/VITABUILD` first, then point `build.yaml` at
 the new name and refresh `SHA256SUMS`.
 
+## CA bundle
+
+`resources/cacert.pem` is Mozilla's CA bundle, as published by curl. libcurl
+and mpv verify HTTPS certificates against it on every platform except Windows
+and the Switch 2, whose curl uses the system's store. Refresh it before a
+release when curl has published a newer one (the date is in its header):
+
+```sh
+curl -fsSL https://curl.se/ca/cacert.pem -o resources/cacert.pem
+curl -fsSL https://curl.se/ca/cacert.pem.sha256   # must match:
+shasum -a 256 resources/cacert.pem
+```
+
 ## Notes
 
 - The default/main branch is `dev`.
+- The in-app updater checks the downloaded file against the `digest` GitHub
+  computes for each release asset, and refuses an asset without one. Assets
+  must therefore be uploaded to the release as they are, never edited in place
+  afterwards by hand.
 - The promo site (`site/`) deploys separately via
   [`pages.yml`](.github/workflows/pages.yml) on push to `dev`; it does not need
   the tag. Pushing the release commit to `dev` already refreshes it.

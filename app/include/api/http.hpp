@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <set>
 #include <memory>
 #include <atomic>
 #include <fstream>
@@ -54,7 +55,8 @@ public:
 
     enum class ErrorKind {
         Other,
-        ResolveFailed,  // the server host did not resolve, a proxy that did not is Other
+        ResolveFailed,         // the server host did not resolve, a proxy that did not is Other
+        CertificateUntrusted,  // the server's certificate did not verify (self-signed, expired, wrong host)
     };
 
     class Error : public std::runtime_error {
@@ -75,6 +77,13 @@ public:
     std::string _put(const std::string& url, const std::string& data);
     void set_user_agent(const std::string& agent);
     static const std::string& default_user_agent();
+    static const std::string& ca_file();
+    /// Origins (misc::urlOrigin) whose certificate is not verified: the user allowed
+    /// their self-signed certificate. AppConfig keeps the list in sync with the config.
+    static void set_insecure_origins(std::set<std::string> origins);
+    /// Allows `url`'s origin until the next set_insecure_origins().
+    static void allow_insecure(const std::string& url);
+    static bool insecure(const std::string& url);
     void set_basic_auth(const std::string& user, const std::string& passwd);
     void _delete(const std::string& url, std::ostream* out);
 

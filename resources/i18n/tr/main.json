@@ -433,6 +433,7 @@
     "switch_title": "Bağlantılar",
     "add": "Ekle",
     "dns_unresolved": "\"{}\" çözümlenemiyor. Switch/Vita’da sunucunuzun IPv4 adresini kullanın (ör. http://192.168.1.50:8096) — .local (mDNS) ve yalnızca IPv6 adları desteklenmez.",
+    "cert_untrusted": "{} GMCA'nın doğrulayamadığı bir sertifika sundu, örneğin kendinden imzalı bir sertifika.\n\nYine de bağlanılsın mı? Bunu yalnızca kendi ağınızdaki kendi sunucunuz için yapın.",
     "jellyfin": {
       "title_jellyfin": "Jellyfin'e Giriş Yap",
       "title_emby": "Emby'ye Giriş Yap",

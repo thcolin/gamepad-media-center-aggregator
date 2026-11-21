@@ -178,6 +178,12 @@ void MPVCore::init() {
     // the app's own User-Agent instead of ffmpeg's "Lavf/..."; the per-remote
     // and per-server `user_agent` still win as loadfile options
     mpv_set_option_string(mpv, "user-agent", HTTP::default_user_agent().c_str());
+    // ffmpeg does not verify certificates by default; a server allowed a
+    // self-signed one gets tls-verify=no per file (setUrl)
+    mpv_set_option_string(mpv, "tls-verify", "yes");
+#ifndef __SWITCH2__
+    mpv_set_option_string(mpv, "tls-ca-file", HTTP::ca_file().c_str());
+#endif
     mpv_set_option_string(mpv, "osd-level", "0");
     mpv_set_option_string(mpv, "video-timing-offset", "0");  // 60fps
     mpv_set_option_string(mpv, "reset-on-next-file", "speed,pause");
@@ -913,8 +919,11 @@ void MPVCore::reset() {
     setFrameSize(rect);
 }
 
-void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method, uint64_t userdata) {
+void MPVCore::setUrl(const std::string &url, const std::string &extraOptions, const std::string &method,
+    uint64_t userdata) {
     if (!this->mpv) return;
+    std::string extra = extraOptions;
+    if (HTTP::insecure(url)) extra += extra.empty() ? "tls-verify=no" : ",tls-verify=no";
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, misc::redactUrl(url), misc::redactUrl(extra));
 #ifdef __PS4__
     bool usbEscape = url.rfind("/mnt/usb", 0) == 0;

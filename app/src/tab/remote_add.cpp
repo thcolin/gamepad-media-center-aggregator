@@ -17,6 +17,7 @@
 #include "client/client.hpp"
 #include "utils/dialog.hpp"
 #include "utils/net_error.hpp"
+#include "utils/log_redact.hpp"
 #include <curl/curl.h>
 
 using namespace brls::literals;
@@ -264,7 +265,7 @@ void RemoteAdd::submit() {
 
     ASYNC_RETAIN
     brls::async([ASYNC_TOKEN, r]() {
-        bool ok = false;
+        bool ok = false, untrusted = false;
         std::string error;
         try {
             // connection test: same code path as the real navigation
@@ -274,15 +275,23 @@ void RemoteAdd::submit() {
             ok = true;
         } catch (const HTTP::Error& ex) {
             error = net::errorText(ex, r.url);
+            untrusted = ex.kind == HTTP::ErrorKind::CertificateUntrusted;
         } catch (const std::exception& ex) {
             error = ex.what();
         }
-        brls::sync([ASYNC_TOKEN, r, ok, error]() {
+        brls::sync([ASYNC_TOKEN, r, ok, untrusted, error]() mutable {
             ASYNC_RELEASE
             brls::Application::unblockInputs();
             this->spinner->setVisibility(brls::Visibility::GONE);
             this->btnSave->setVisibility(brls::Visibility::VISIBLE);
-            if (ok) {
+            if (untrusted) {
+                std::string url = misc::redactUrl(r.url);
+                Dialog::cancelable(brls::getStr("main/server/cert_untrusted", url), [this, r]() {
+                    HTTP::allow_insecure(r.url);
+                    this->submit();
+                });
+            } else if (ok) {
+                r.insecure_tls = HTTP::insecure(r.url);
                 auto& conf = AppConfig::instance();
                 if (this->editIndex < 0)
                     conf.addRemote(r);

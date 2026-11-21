@@ -433,6 +433,7 @@
     "switch_title": "Kết nối",
     "add": "Thêm",
     "dns_unresolved": "Không thể phân giải “{}”. Trên Switch/Vita, hãy dùng địa chỉ IPv4 của máy chủ (ví dụ: http://192.168.1.50:8096) — tên .local (mDNS) và chỉ IPv6 không được hỗ trợ.",
+    "cert_untrusted": "{} đưa ra một chứng chỉ mà GMCA không thể xác minh, ví dụ chứng chỉ tự ký.\n\nVẫn kết nối? Chỉ làm vậy với máy chủ của chính bạn, trong mạng của chính bạn.",
     "jellyfin": {
       "title_jellyfin": "Đăng nhập vào Jellyfin",
       "title_emby": "Đăng nhập vào Emby",

@@ -433,6 +433,7 @@
     "switch_title": "接続先",
     "add": "追加",
     "dns_unresolved": "「{}」を解決できません。Switch/Vita ではサーバーの IPv4 アドレスを使用してください（例: http://192.168.1.50:8096）。.local（mDNS）や IPv6 のみの名前には対応していません。",
+    "cert_untrusted": "{} の証明書を GMCA で検証できません（自己署名証明書など）。\n\nそれでも接続しますか？自分のネットワーク上にある自分のサーバーの場合だけにしてください。",
     "jellyfin": {
       "title_jellyfin": "Jellyfin にサインイン",
       "title_emby": "Emby にサインイン",

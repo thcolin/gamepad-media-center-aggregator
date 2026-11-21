@@ -49,6 +49,8 @@ constexpr uint32_t MINIMUM_WINDOW_HEIGHT = 360;
 #include "api/stremio/backend.hpp"
 #include "api/http.hpp"
 #include "utils/atomic_file.hpp"
+#include "utils/url_origin.hpp"
+#include <set>
 #include "utils/config.hpp"
 #include "utils/theme_palette.hpp"
 #include "utils/keybind.hpp"
@@ -283,6 +285,7 @@ bool AppConfig::init() {
         std::string raw;
         if (AtomicFile::read(path, raw)) {
             nlohmann::json::parse(raw).get_to(*this);
+            this->syncInsecureOrigins();
             brls::Logger::info("Load config from: {}", path);
         }
     } catch (const std::exception& ex) {
@@ -557,6 +560,7 @@ bool AppConfig::init() {
 }
 
 void AppConfig::save() {
+    this->syncInsecureOrigins();
     try {
         std::string dir = this->configDir();
         fs::create_directories(dir);
@@ -564,6 +568,16 @@ void AppConfig::save() {
     } catch (const std::exception& ex) {
         brls::Logger::warning("AppConfig save: {}", ex.what());
     }
+}
+
+void AppConfig::syncInsecureOrigins() {
+    std::set<std::string> origins;
+    for (auto& s : this->servers)
+        if (s.insecure_tls)
+            for (auto& u : s.urls) origins.insert(misc::urlOrigin(u));
+    for (auto& r : this->remotes)
+        if (r.insecure_tls) origins.insert(misc::urlOrigin(r.url));
+    HTTP::set_insecure_origins(origins);
 }
 
 AppConfig::~AppConfig() { delete this->activeBackend; }
@@ -752,6 +766,7 @@ bool AppConfig::addServer(const AppServer& s) {
         if (s.id == o.id) {
             if (!s.name.empty()) o.name = s.name;
             if (!s.access_token.empty()) o.access_token = s.access_token;
+            if (s.insecure_tls) o.insecure_tls = true;
             this->server_token = o.access_token;
             // remove old url
             for (auto it = o.urls.begin(); it != o.urls.end(); ++it) {

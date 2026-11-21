@@ -433,6 +433,7 @@
     "switch_title": "連線",
     "add": "新增",
     "dns_unresolved": "無法解析「{}」。在 Switch/Vita 上，請使用伺服器的 IPv4 位址（例如 http://192.168.1.50:8096）——不支援 .local（mDNS）與僅 IPv6 的名稱。",
+    "cert_untrusted": "{} 提供的憑證無法被 GMCA 驗證（例如自簽憑證）。\n\n仍要連線嗎？請只對你自己網路中的自有伺服器這樣做。",
     "jellyfin": {
       "title_jellyfin": "登入 Jellyfin",
       "title_emby": "登入 Emby",

@@ -19,6 +19,7 @@
 #include "api/jellyfin/auth.hpp"
 #include "api/jellyfin/types.hpp"
 #include "utils/config.hpp"
+#include "utils/dialog.hpp"
 #include "utils/net_error.hpp"
 
 using namespace brls::literals;
@@ -84,7 +85,7 @@ void JellyfinAdd::submit() {
     brls::async([ASYNC_TOKEN, type, url, user, pass]() {
         std::string error;
         jellyfin::LoginResult r;
-        bool ok = false;
+        bool ok = false, untrusted = false;
         try {
             std::string name = jellyfin::getServerName(url);
             r = jellyfin::login(url, user, pass);
@@ -92,18 +93,25 @@ void JellyfinAdd::submit() {
             ok = true;
         } catch (const HTTP::Error& ex) {
             error = net::errorText(ex, url);
+            untrusted = ex.kind == HTTP::ErrorKind::CertificateUntrusted;
         } catch (const std::exception& ex) {
             error = ex.what();
         }
-        brls::sync([ASYNC_TOKEN, url, r, ok, error]() {
+        brls::sync([ASYNC_TOKEN, url, r, ok, untrusted, error]() {
             ASYNC_RELEASE
             brls::Application::unblockInputs();
             this->spinner->setVisibility(brls::Visibility::GONE);
             this->btnConnect->setVisibility(brls::Visibility::VISIBLE);
-            if (ok)
+            if (ok) {
                 this->finish(url, r);
-            else
-                this->labelStatus->setText(error);
+                return;
+            }
+            this->labelStatus->setText(error);
+            if (untrusted)
+                Dialog::cancelable(brls::getStr("main/server/cert_untrusted", url), [this, url]() {
+                    HTTP::allow_insecure(url);
+                    this->submit();
+                });
         });
     });
 }
@@ -115,6 +123,7 @@ void JellyfinAdd::finish(const std::string& url, const jellyfin::LoginResult& r)
     s.access_token = r.token;
     s.urls.push_back(url);
     s.type = this->type;
+    s.insecure_tls = HTTP::insecure(url);
     AppConfig::instance().addServer(s);
 
     AppUser u;
