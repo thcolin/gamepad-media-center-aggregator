@@ -174,6 +174,9 @@ Clear the quarantine attribute:
 sudo xattr -rd com.apple.quarantine /Applications/GMCA.app
 ```
 
+**Where are my logins stored?**
+In `config.json`, in GMCA's data folder (`sdmc:/switch/GMCA/` on Switch). The Plex, Jellyfin, Emby and Stremio access tokens and the remote passwords are saved there unencrypted, so anyone who copies that file can use your accounts: don't share it, and keep it out of backups you hand over.
+
 **How do I enable an external drive on Switch?**
 Set `ums` in `config.json` (in `sdmc:/switch/GMCA/`):
 
