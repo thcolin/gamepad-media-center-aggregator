@@ -2,13 +2,12 @@
 #include "utils/config.hpp"
 #include "utils/url_origin.hpp"
 #include "utils/atomic_file.hpp"
+#ifdef USE_LIBROMFS
+#include <romfs/romfs.hpp>
+#endif
 #include <borealis/core/logger.hpp>
 #include <curl/curl.h>
 #include <mutex>
-#ifdef USE_LIBROMFS
-#include <exception>  // romfs' nonstd/span.hpp calls std::terminate without including it
-#include <romfs/romfs.hpp>
-#endif
 #if defined(BOREALIS_USE_GXM)
 #include <mbedtls/platform.h>
 #include <psp2/gxm.h>
