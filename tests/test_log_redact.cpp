@@ -96,6 +96,13 @@ int main() {
 
     CHECK_EQ(redactUrl("/Volumes/Films/a.mkv"), "/Volumes/Films/a.mkv");
 
+    CHECK_EQ(redactUrl("network-timeout=30,http-header-fields=\"Authorization: Basic Ym9iOmh1bnRlcjI=\",user_agent=\"x\""),
+        "network-timeout=30,http-header-fields=\"Authorization: Basic ***\",user_agent=\"x\"");
+
+    CHECK_EQ(redactTokens("authorization:SECRET"), "authorization:***");
+
+    CHECK_EQ(redactTokens("Authorization: MediaBrowser Token=abc, Client=x"), "Authorization: MediaBrowser ***, Client=x");
+
     if (failures == 0) {
         printf("test_log_redact: OK\n");
         return 0;

@@ -49,8 +49,19 @@ inline size_t ifind(const std::string& text, const std::string& key, size_t from
 }  // namespace detail
 
 /// Masks the value of the token parameters (X-Plex-Token, api_key, ApiKey), plain or
-/// URL-encoded, and leaves the rest of the text as is.
+/// URL-encoded, and the credentials of an Authorization header, and leaves the rest
+/// of the text as is.
 inline std::string redactTokens(std::string text) {
+    for (size_t pos = 0; (pos = detail::ifind(text, "authorization:", pos)) != std::string::npos;) {
+        pos = text.find_first_not_of(' ', pos + std::strlen("authorization:"));
+        if (pos == std::string::npos) break;
+        size_t scheme = text.find(' ', pos);  // "Basic <b64>": the scheme stays readable
+        size_t end = text.find_first_of("\"',\n", pos);
+        if (end == std::string::npos) end = text.size();
+        if (scheme != std::string::npos && scheme < end) pos = scheme + 1;
+        text.replace(pos, end - pos, "***");
+        pos += 3;
+    }
     for (const char* key : {"token=", "api_key=", "apikey=", "token%3D", "api_key%3D", "apikey%3D"}) {
         for (size_t pos = 0; (pos = detail::ifind(text, key, pos)) != std::string::npos;) {
             pos += std::strlen(key);
