@@ -3,6 +3,7 @@
 #include "client/apache.hpp"
 #include "client/avio.hpp"
 #include <utils/misc.hpp>
+#include <view/mpv_options.hpp>
 
 namespace remote {
 
@@ -35,11 +36,11 @@ void Client::init(const AppRemote& conf, HTTP& cilent) {
         ssextra << fmt::format(",http-header-fields=\"Authorization: Basic {}\"", auth);
         cilent.set_basic_auth(conf.user, conf.passwd);
     }
+    this->extra = ssextra.str();
     if (conf.user_agent.size() > 0) {
-        ssextra << fmt::format(",user-agent=%{}%{}", conf.user_agent.size(), conf.user_agent);
+        this->extra = mpvopt::add(this->extra, "user-agent", conf.user_agent);
         cilent.set_user_agent(conf.user_agent);
     }
-    this->extra = ssextra.str();
 }
 
 }  // namespace remote

@@ -64,8 +64,9 @@ struct AppServer {
     // Stremio only: transport URLs (…/manifest.json) of the installed addons,
     // either entered manually or synced from the account's addon collection.
     std::vector<std::string> addons;
-    // User-Agent of the media requests mpv sends (direct play, transcode, and
-    // the CDN a server redirects to); empty keeps the app's own. config.json only.
+    // User-Agent of the media requests mpv sends for this server, Stremio's addon
+    // streams included, and kept on a redirect to a CDN; empty keeps the app's own.
+    // config.json only.
     std::string user_agent;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(AppServer, id, name, access_token, urls, type, addons, user_agent);

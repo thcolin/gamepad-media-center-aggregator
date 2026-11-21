@@ -17,6 +17,7 @@
 #include "view/player_setting.hpp"
 #include "view/video_view.hpp"
 #include "view/video_profile.hpp"
+#include "view/mpv_options.hpp"
 #include "view/audio_player.hpp"
 
 using namespace brls::literals;
@@ -365,7 +366,7 @@ void PlayerView::startPlayback(const int64_t seekMs, bool forceDirect, int64_t f
                 this->transcodeSession = src.transcodeSession;
                 std::string extra = src.mpvExtra;
                 const std::string& ua = AppConfig::instance().getUserAgent();
-                if (!ua.empty()) extra += fmt::format(",user-agent=%{}%{}", ua.size(), ua);
+                if (!ua.empty()) extra = mpvopt::add(extra, "user-agent", ua);
                 MPVCore::instance().setUrl(src.url, extra);
             });
         } catch (const std::exception& ex) {
