@@ -120,6 +120,14 @@ std::vector<plex::Item> OfflineLibrary::leaves(const std::string& showRatingKey)
     return offline::leavesOf(this->derived, showRatingKey);
 }
 
+std::vector<plex::Item> OfflineLibrary::playQueue(const std::string& episodeKey) const {
+    // same lock order as prune(): ours, then DownloadManager's
+    auto& dm = DownloadManager::instance();
+    std::lock_guard<std::mutex> lock(this->mutex);
+    return offline::playQueue(
+        this->derived, episodeKey, [&dm](const std::string& k) { return dm.isDownloaded(k); });
+}
+
 std::vector<plex::Item> OfflineLibrary::search(const std::string& term) const {
     std::lock_guard<std::mutex> lock(this->mutex);
     return offline::search(this->derived, term);

@@ -438,12 +438,8 @@ public:
         auto& row = this->rows.at(index);
         if (row.kind != Row::Kind::Item) return;
         auto& item = row.item;
-        auto& dm = DownloadManager::instance();
 
         if (item.status == DownloadStatus::Completed) {
-            std::string path = dm.getLocalPath(item.itemId);
-            if (path.empty()) return;
-
             std::string detail;
             if (!item.seriesName.empty()) {
                 detail = fmt::format("{} - S{}E{}", item.seriesName, item.seasonIndex, item.episodeIndex);
@@ -452,7 +448,7 @@ public:
             } else {
                 detail = item.name;
             }
-            RemoteView::play(path, detail, "Local");
+            RemoteView::playDownload(item.itemId, detail);
         } else if (item.status == DownloadStatus::Downloading) {
             std::string id = item.itemId;
             Dialog::cancelable("main/download/confirm_cancel"_i18n, [id]() {

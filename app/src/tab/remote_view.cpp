@@ -17,6 +17,8 @@
 #include "utils/config.hpp"
 #include "utils/dialog.hpp"
 #include "utils/keybind.hpp"
+#include "utils/download.hpp"
+#include "utils/offline_library.hpp"
 
 using namespace brls::literals;
 
@@ -100,7 +102,9 @@ public:
     }
 #endif
 
-    void setList(const DirList& list, size_t index, const std::string& extra) {
+    /// fileNames: entry names are file names whose extension is stripped for
+    /// the title and subtitle matching; false when they are already titles
+    void setList(const DirList& list, size_t index, const std::string& extra, bool fileNames = true) {
         // 播放列表
         // the constructor may have seeded a single title (standalone playback);
         // a real list rebuilds it from scratch, otherwise titles/urls desync
@@ -116,7 +120,7 @@ public:
         }
         if (titles.size() > 1) view->setList(titles, index);
 
-        playSubscribeID = view->getPlayEvent()->subscribe([this, list, urls, extra](int index) {
+        playSubscribeID = view->getPlayEvent()->subscribe([this, list, urls, extra, fileNames](int index) {
             if (index < 0 || index >= (int)urls.size()) {
                 return VideoView::close(true);
             }
@@ -125,7 +129,7 @@ public:
 
             std::string name = item.name;
             auto pos = name.find_last_of(".");
-            if (pos != std::string::npos) {
+            if (fileNames && pos != std::string::npos) {
                 name = name.substr(0, pos);
             }
 
@@ -133,7 +137,7 @@ public:
             for (auto& s : list) {
                 if (s.type == remote::EntryType::SUBTITLE) {
                     if (!s.name.rfind(name, 0)) {
-                        this->subtitles.insert(std::make_pair(s.name.substr(pos), s.url()));
+                        this->subtitles.insert(std::make_pair(s.name.substr(name.size()), s.url()));
                     }
                 }
             }
@@ -668,4 +672,27 @@ void RemoteView::play(const std::string& path, const std::string& name, const st
     RemotePlayer* view = new RemotePlayer({remote::EntryType::VIDEO, name, path}, method);
     brls::Application::pushActivity(new brls::Activity(view), brls::TransitionAnimation::NONE);
     view->setUrl(path);
+}
+
+void RemoteView::playDownload(const std::string& ratingKey, const std::string& name) {
+    auto& dm = DownloadManager::instance();
+    // setList skips index 0 (the UP sentinel) and takes a list index
+    DirList list = {{remote::EntryType::UP}};
+    size_t index = 0;
+    for (auto& ep : OfflineLibrary::instance().playQueue(ratingKey)) {
+        if (ep.ratingKey == ratingKey) index = list.size();
+        std::string title = ep.grandparentTitle.empty()
+                                ? fmt::format("S{}E{} — {}", ep.parentIndex, ep.index, ep.title)
+                                : fmt::format("{} · S{}E{} — {}", ep.grandparentTitle, ep.parentIndex, ep.index,
+                                      ep.title);
+        list.push_back({remote::EntryType::VIDEO, title, dm.getLocalPath(ep.ratingKey)});
+    }
+    if (index == 0) {
+        std::string path = dm.getLocalPath(ratingKey);
+        if (!path.empty()) RemoteView::play(path, name, "Local");
+        return;
+    }
+    RemotePlayer* view = new RemotePlayer(list.at(index), "Local");
+    view->setList(list, index, "", false);
+    brls::Application::pushActivity(new brls::Activity(view), brls::TransitionAnimation::NONE);
 }

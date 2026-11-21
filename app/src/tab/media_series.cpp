@@ -196,7 +196,7 @@ public:
                                     ? fmt::format("S{}E{} — {}", item.parentIndex, item.index, item.title)
                                     : fmt::format("{} · S{}E{} — {}", item.grandparentTitle, item.parentIndex,
                                           item.index, item.title);
-            RemoteView::play(local, title, "Local");
+            RemoteView::playDownload(item.ratingKey, title);
             return;
         }
         // not downloaded: offline it is unavailable; online (downloads area) it
