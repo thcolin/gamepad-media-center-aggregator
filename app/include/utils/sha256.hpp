@@ -14,6 +14,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace misc {
 
@@ -118,8 +119,8 @@ inline std::string sha256File(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
     if (!in) throw std::runtime_error("cannot read " + path);
     Sha256 sha;
-    char buf[64 * 1024];
-    while (in.read(buf, sizeof(buf)) || in.gcount() > 0) sha.update(buf, size_t(in.gcount()));
+    std::vector<char> buf(64 * 1024);  // off the stack: the console worker threads have small ones
+    while (in.read(buf.data(), buf.size()) || in.gcount() > 0) sha.update(buf.data(), size_t(in.gcount()));
     return sha.hex();
 }
 
