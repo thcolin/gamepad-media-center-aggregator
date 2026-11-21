@@ -27,6 +27,7 @@
 #include "utils/dialog.hpp"
 #include "utils/thread.hpp"
 #include "utils/misc.hpp"
+#include "utils/sha256.hpp"
 #include "utils/vita_install.hpp"
 #include "api/http.hpp"
 
@@ -160,10 +161,10 @@ static void extractNro(const std::string& zip_path, const std::string& nro) {
 #endif
 
 /// Downloads the release NRO into a temporary file in configDir, verifies
-/// its size, then replaces the running NRO (real path provided by
+/// its size and SHA-256, then replaces the running NRO (real path provided by
 /// hbloader/the forwarder via argv[0], cf. AppVersion::nro_path).
 /// Progress is shown in a dialog with a cancel button.
-static void startUpdate(const std::string& latest_ver, const std::string& url, int64_t size) {
+static void startUpdate(const std::string& latest_ver, const std::string& url, int64_t size, const std::string& digest) {
     AppVersion::updating->store(false);
 
     brls::Style style = brls::Application::getStyle();
@@ -192,7 +193,7 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
     });
     dialog->open();
 
-    ThreadPool::instance().submit([latest_ver, url, size, label, dialog, dismissed](HTTP& s) {
+    ThreadPool::instance().submit([latest_ver, url, size, digest, label, dialog, dismissed](HTTP& s) {
         std::string conf_dir = AppConfig::instance().configDir();
         std::string pkg_name = AppVersion::getPackageName();
         std::string path = fmt::format("{}/{}_{}.nro", conf_dir, pkg_name, latest_ver);
@@ -234,8 +235,11 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
             if (size > 0 && actual != static_cast<std::uintmax_t>(size))
                 throw std::runtime_error(fmt::format("incomplete download ({}/{} bytes)", actual, size));
 #ifdef __SWITCH2__
+            misc::verifyDigest(zip_path, digest);
             extractNro(zip_path, path);
             std::filesystem::remove(zip_path);
+#else
+            misc::verifyDigest(path, digest);
 #endif
 
             // the romfs is mapped from the NRO file: unmount before replacing it
@@ -266,12 +270,12 @@ static int64_t vitaFileSize(const std::string& path) {
     return static_cast<int64_t>(st.st_size);
 }
 
-/// Downloads the release VPK into configDir, verifies its size, then installs
+/// Downloads the release VPK into configDir, verifies its size and SHA-256, then installs
 /// it in place via ScePromoterUtility (cf. vita::installVpk). Unlike the Switch
 /// path there is no in-process restart: the bubble is replaced under
 /// `ux0:app`, so the app quits to the LiveArea and the user relaunches the new
 /// version. Progress is shown in a dialog with a cancel button.
-static void startUpdate(const std::string& latest_ver, const std::string& url, int64_t size) {
+static void startUpdate(const std::string& latest_ver, const std::string& url, int64_t size, const std::string& digest) {
     AppVersion::updating->store(false);
 
     brls::Style style = brls::Application::getStyle();
@@ -297,7 +301,7 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
     });
     dialog->open();
 
-    ThreadPool::instance().submit([latest_ver, url, size, label, dialog, dismissed](HTTP& s) {
+    ThreadPool::instance().submit([latest_ver, url, size, digest, label, dialog, dismissed](HTTP& s) {
         std::string conf_dir = AppConfig::instance().configDir();
         std::string pkg_name = AppVersion::getPackageName();
         std::string path = fmt::format("{}/{}_{}.vpk", conf_dir, pkg_name, latest_ver);
@@ -331,6 +335,7 @@ static void startUpdate(const std::string& latest_ver, const std::string& url, i
             int64_t actual = vitaFileSize(path);
             if (size > 0 && actual != size)
                 throw std::runtime_error(fmt::format("incomplete download ({}/{} bytes)", actual, size));
+            misc::verifyDigest(path, digest);
 
             // extraction + head.bin + promotion is blocking and cannot report a
             // percentage: swap the label so the app doesn't look frozen
@@ -411,9 +416,9 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
 #else
             const std::string asset_ext = ".vpk";
 #endif
-            std::string asset_url;
+            std::string asset_url, asset_digest;
             int64_t asset_size = 0;
-            std::string fallback_url;
+            std::string fallback_url, fallback_digest;
             int64_t fallback_size = 0;
             for (auto& asset : j.at("assets")) {
                 std::string name = asset.at("name").get<std::string>();
@@ -421,25 +426,33 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
                     name.compare(name.size() - asset_ext.size(), asset_ext.size(), asset_ext) == 0) {
                     std::string u = asset.at("browser_download_url").get<std::string>();
                     int64_t sz = asset.value("size", int64_t(0));
+                    // null on assets uploaded before GitHub started computing it
+                    std::string dg = asset.contains("digest") && asset["digest"].is_string()
+                                         ? asset["digest"].get<std::string>()
+                                         : std::string();
 #if defined(__SWITCH2__)
                     if (name.find("switch2") != std::string::npos) {
                         asset_url = u;
                         asset_size = sz;
+                        asset_digest = dg;
                         break;
                     }
 #elif defined(__SWITCH__)
                     if (name.find("switch1") != std::string::npos || name == "GMCA.nro") {
                         asset_url = u;
                         asset_size = sz;
+                        asset_digest = dg;
                         break;
                     }
                     if (fallback_url.empty() && name.find("switch2") == std::string::npos) {
                         fallback_url = u;
                         fallback_size = sz;
+                        fallback_digest = dg;
                     }
 #else
                     asset_url = u;
                     asset_size = sz;
+                    asset_digest = dg;
                     break;
 #endif
                 }
@@ -447,13 +460,14 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
             if (asset_url.empty()) {
                 asset_url = fallback_url;
                 asset_size = fallback_size;
+                asset_digest = fallback_digest;
             }
             if (asset_url.empty()) {
                 brls::Logger::error("checkUpdate: no {} asset in release {}", asset_ext, latest_ver);
                 return;
             }
 
-            brls::sync([latest_ver, asset_url, asset_size, release_body]() {
+            brls::sync([latest_ver, asset_url, asset_size, asset_digest, release_body]() {
                 std::string title = brls::getStr("main/setting/others/upgrade", latest_ver);
                 auto dialog = makeUpdateDialog(title, release_body);
                 dialog->addButton("hints/cancel"_i18n, []() {
@@ -461,7 +475,9 @@ void AppVersion::checkUpdate(int delay, bool showUpToDateDialog) {
                     conf.setItem(AppConfig::APP_UPDATE, getVersion());
                 });
                 dialog->addButton("hints/ok"_i18n,
-                    [latest_ver, asset_url, asset_size]() { startUpdate(latest_ver, asset_url, asset_size); });
+                    [latest_ver, asset_url, asset_size, asset_digest]() {
+                        startUpdate(latest_ver, asset_url, asset_size, asset_digest);
+                    });
                 dialog->open();
             });
 #else
