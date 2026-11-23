@@ -305,32 +305,24 @@ int main() {
     lg("request: title %s, pkg %s, name %s, label %s", r.title.c_str(), r.pkg.c_str(), r.name.c_str(), r.label.c_str());
     unlink(upd::requestFile);  // one install per request
 
-    // GMCA closes once it has seen "waiting". It is the foreground app until then (it just started
-    // this helper, and it waits for "waiting"), so it is gone when the foreground app id changes.
-    // When that id can't be read, give it a fixed while: installing over a title that still runs
-    // is refused.
+    // GMCA closes once it has seen "waiting". The foreground app id only hints at when: some
+    // consoles can't read it (-1), and on others it stayed GMCA's for over a minute after GMCA had
+    // closed (2026-11-23), so a helper that waited for it to change gave up and installed nothing.
+    // So the id may end the wait early, but after a short while the install goes ahead anyway:
+    // the installer itself refuses a title that still runs, which leaves GMCA as it was.
     const int gmcaId = ps4::foregroundAppId();
     lg("foreground app id 0x%08x", (unsigned)gmcaId);
     setStatus("waiting", r.label);
-    if (gmcaId < 0) {
-        lg("can't tell when %s closes: waiting 7 s", r.title.c_str());
-        sleep(7);  // GMCA usually closes within 5 s; a refused install leaves it as it was
-    } else {
-        int waited = 0;
-        while (ps4::foregroundAppId() == gmcaId && waited < 60 * 1000) {
-            usleep(stepMs * 1000);
-            waited += stepMs;
-        }
-        if (ps4::foregroundAppId() == gmcaId) {
-            lg("%s still in the foreground after 60 s", r.title.c_str());
-            setStatus("failed", r.name + " did not close");
-            ps4::notify(r.name + " didn't update: it didn't close. Nothing changed.");
-            leave();
-        }
-        lg("%s closed after %.1f s (foreground now 0x%08x)", r.title.c_str(), waited / 1000.0,
-           (unsigned)ps4::foregroundAppId());
+    const int maxWaitMs = gmcaId < 0 ? 7 * 1000 : 10 * 1000;
+    int waited = 0;
+    while (waited < maxWaitMs && (gmcaId < 0 || ps4::foregroundAppId() == gmcaId)) {
+        usleep(stepMs * 1000);
+        waited += stepMs;
     }
+    lg("waited %.1f s for %s to close (foreground now 0x%08x)", waited / 1000.0, r.title.c_str(),
+       (unsigned)ps4::foregroundAppId());
     sleep(2);  // let the system finish closing it
+    ps4::notify("Updating " + r.name + " to " + r.label + ". Wait for the next message before opening it.");
 
     const std::string why = install(r);
     if (why.empty()) {

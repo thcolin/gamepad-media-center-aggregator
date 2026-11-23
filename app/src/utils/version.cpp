@@ -12,6 +12,8 @@
 #elif defined(__PS4__)
 #include <sys/stat.h>
 #include "utils/ps4_self_update.hpp"
+// the app links libSceSystemService (borealis declares it the same way)
+extern "C" int sceSystemServiceLoadExec(const char* path, const char* args[]);
 #elif defined(ANDROID)
 #include <SDL2/SDL.h>
 #include <jni.h>
@@ -393,10 +395,15 @@ static void installPs4Update(const std::string& latest_ver) {
             std::fclose(log);
         }
         brls::sync([ok, err, failed]() {
-            if (ok)
-                Dialog::quitAppNow(false);
-            else
+            if (!ok) {
                 failed(err);
+                return;
+            }
+            Dialog::quitAppNow(false);
+            // and leave now: a normal exit first waits for the background tasks and the torrent
+            // service, with GMCA still the app in front meanwhile (the call borealis makes at the
+            // very end, ps4_platform.cpp). Settings are saved as they change.
+            sceSystemServiceLoadExec("exit", nullptr);
         });
     });
 }
