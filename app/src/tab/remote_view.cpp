@@ -65,7 +65,7 @@ public:
                 view->getProfile()->init(method);
                 const char* flag = MPVCore::SUBS_FALLBACK ? "select" : "auto";
                 for (auto& it : this->subtitles) {
-                    mpv.command("sub-add", it.second.c_str(), flag, it.first.c_str());
+                    mpv.addSubtitle(it.second, flag, it.first);
                 }
                 break;
             }

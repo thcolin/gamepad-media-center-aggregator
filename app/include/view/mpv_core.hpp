@@ -8,6 +8,8 @@
 #include <borealis/core/singleton.hpp>
 #include <mpv/client.h>
 #include <utils/event.hpp>
+#include <functional>
+#include <map>
 #ifdef MPV_SW_RENDER
 #include <mpv/render.h>
 #elif defined(BOREALIS_USE_D3D11)
@@ -48,6 +50,10 @@ public:
         const char *cmd[] = {args..., nullptr};
         if (mpv) mpv_command_async(mpv, 0, cmd);
     }
+
+    /// sub-add of a subtitle file next to the video. On the PS4 a file under /mnt/usb is read
+    /// outside the sandbox, which is held until mpv has added it.
+    void addSubtitle(const std::string &path, const char *flag, const std::string &title);
 
     bool isStopped() const;
 
@@ -189,9 +195,15 @@ private:
     brls::Rect rect = {0, 0, 1920, 1080};
     bool video_stopped = true;
 #ifdef __PS4__
-    int usb_escapes = 0;  // loads from /mnt/usb still holding a ps4::beginEscape
-    bool usb_file_loaded = false;  // FILE_LOADED seen for the current load: its escape is already released
-    void releaseUsbEscape();
+    // mpv commands that read a file under /mnt/usb, each holding a ps4::beginEscape, by the
+    // reply_userdata of the command: for a loadfile, its playlist entry (0 until the command's
+    // reply gives it); -1 for a sub-add, which its reply releases.
+    std::map<uint64_t, int64_t> usb_holds;
+    uint64_t usb_next_tag = uint64_t(1) << 62;  // reply_userdata for them, above the callers' own
+    int64_t current_entry = 0;  // playlist entry of the last START_FILE
+    int64_t loaded_entry = 0;   // and of the last FILE_LOADED
+    uint64_t holdUsbEscape(uint64_t userdata, int64_t entry);
+    void releaseUsbEscapes(const std::function<bool(uint64_t tag, int64_t entry)> &which);
 #endif
     bool video_paused = false;
     bool voEnabled = true;  // false in audio-only mode (music): keep playing when backgrounded
