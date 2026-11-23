@@ -8,6 +8,7 @@
 #include "utils/thread.hpp"
 #include "api/plex.hpp"
 #include "api/backend.hpp"
+#include "api/stremio/streaming_server.hpp"
 #include <algorithm>
 #include <cctype>
 
@@ -492,9 +493,12 @@ void DownloadManager::doDownload(DownloadItem& item) {
             std::ofstream of(filePath, std::ios::binary);
             if (!of) throw std::runtime_error("Failed to open file for writing");
 
+            // a Stremio torrent opens on the streaming server set in Settings first; it throws
+            // with the reason when it can't (api/stremio/streaming_server.hpp)
+            const std::string source = stremio::streaming::open(url);
             HTTP s;
             HTTP::set_option(s, header, cancel, progressCb);
-            s._get(url, &of);
+            s._get(source, &of);
             of.close();
 
             cancelled = cancel->load();

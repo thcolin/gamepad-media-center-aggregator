@@ -40,6 +40,7 @@
 #include <vector>
 #include "api/http.hpp"
 #include "api/media/types.hpp"
+#include "api/stremio/streaming_server.hpp"
 
 namespace stremio {
 
@@ -479,6 +480,8 @@ struct StreamOption {
     std::string externalUrl;  // open in browser / external app
     std::string infoHash;     // torrent
     int fileIdx = -1;         // torrent file index
+    std::vector<std::string> sources;  // torrent: "tracker:<url>", "dht:<hash>"
+    std::string filename;     // torrent: behaviorHints.filename
     bool notWebReady = false;
     std::string bingeGroup;
 };
@@ -496,10 +499,15 @@ inline std::vector<StreamOption> parseStreams(const nlohmann::json& j) {
         so.externalUrl = jstr(s, "externalUrl");
         so.infoHash = jstr(s, "infoHash");
         so.fileIdx = (int)jint(s, "fileIdx", -1);
+        auto src = s.find("sources");
+        if (src != s.end() && src->is_array())
+            for (auto& v : *src)
+                if (v.is_string()) so.sources.push_back(v.get<std::string>());
         auto bh = s.find("behaviorHints");
         if (bh != s.end() && bh->is_object()) {
             so.notWebReady = jbool(*bh, "notWebReady");
             so.bingeGroup = jstr(*bh, "bingeGroup");
+            so.filename = jstr(*bh, "filename");
         }
         out.push_back(std::move(so));
     }
@@ -673,21 +681,18 @@ inline bool detectDebrid(const std::string& name, bool& cached) {
 
 /// Map one Stremio stream to a neutral source row. `addonName` (manifest name)
 /// is the reliable provenance label (the addon brand inside `name` is not always
-/// present). Only `url` streams are playable here; infoHash/ytId/externalUrl are
-/// classified as non-playable (no torrent engine / no browser on console).
-inline media::Media streamToMedia(const StreamOption& s, const std::string& addonName) {
+/// present). `url` streams are playable here, and torrents when a Stremio streaming
+/// server is set (`viaServer`, api/stremio/streaming_server.hpp); ytId/externalUrl are
+/// classified as non-playable (no browser on console), and torrents without a server
+/// too (no torrent client on the device).
+inline media::Media streamToMedia(const StreamOption& s, const std::string& addonName, bool viaServer = false) {
     media::Media m;
     std::string blob = s.name + " " + s.title;
     m.videoResolution = qualityLabel(blob);
     m.label = addonName;
-
-    if (!s.url.empty()) {
-        bool cached = true;
-        bool debrid = detectDebrid(s.name, cached);
-        m.kind = debrid ? media::SourceKind::Debrid : media::SourceKind::Direct;
-        m.cached = cached;
+    auto playFrom = [&m, &s, &blob](const std::string& key) {
         media::Part p;
-        p.key = s.url;
+        p.key = key;
         p.accessible = true;
         p.exists = true;
         m.parts.push_back(std::move(p));
@@ -700,8 +705,25 @@ inline media::Media streamToMedia(const StreamOption& s, const std::string& addo
         if (!m.videoCodec.empty()) detail = m.videoCodec;
         if (!size.empty()) detail += (detail.empty() ? "" : "  ·  ") + size;
         m.detail = detail;
+    };
+
+    if (!s.url.empty()) {
+        bool cached = true;
+        bool debrid = detectDebrid(s.name, cached);
+        m.kind = debrid ? media::SourceKind::Debrid : media::SourceKind::Direct;
+        m.cached = cached;
+        playFrom(s.url);
     } else if (!s.infoHash.empty()) {
         m.kind = media::SourceKind::Torrent;
+        if (viaServer) {
+            streaming::TorrentStream t;
+            t.infoHash = s.infoHash;
+            t.fileIdx = s.fileIdx;
+            t.trackers = streaming::trackersFromSources(s.sources);
+            t.filename = s.filename;
+            const std::string key = streaming::streamKey(t);
+            if (!key.empty()) playFrom(key);
+        }
     } else if (!s.ytId.empty()) {
         m.kind = media::SourceKind::Youtube;
     } else {
