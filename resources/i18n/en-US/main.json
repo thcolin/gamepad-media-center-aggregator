@@ -387,6 +387,9 @@
       "downloading": "Downloading {}… {}%",
       "installing": "Installing the update…",
       "updated": "Update installed. The application will now close: launch it again to use the new version",
+      "ps4_install": "{} is downloaded. GMCA will close so the PS4 can install it over this version (your settings and library are kept). Open GMCA again once the PS4 says the update is installed.",
+      "ps4_update_failed": "The update didn't install: {}\nThis version still works.",
+      "ps4_update_kept": "The downloaded package is kept at {} if you want to install it by hand.",
       "release": "Check for updates",
       "changelog": "Changelog"
     }
