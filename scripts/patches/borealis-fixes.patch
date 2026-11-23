@@ -955,6 +955,18 @@ index 59ec77bb..546db73f 100644
      // Misc
      this->registerStringXMLAttribute("title", [this](std::string value) {
          this->getAppletFrameItem()->title = value;
+diff --git a/library/lib/extern/libromfs/lib/include/nonstd/span.hpp b/library/lib/extern/libromfs/lib/include/nonstd/span.hpp
+index 69f7ef7e..d47352fa 100644
+--- a/library/lib/extern/libromfs/lib/include/nonstd/span.hpp
++++ b/library/lib/extern/libromfs/lib/include/nonstd/span.hpp
+@@ -242,6 +242,7 @@ using std::dynamic_extent;
+ #else  // span_USES_STD_SPAN
+ 
+ #include <algorithm>
++#include <exception>  // std::terminate, no longer pulled in by <algorithm> on newer libc++
+ 
+ // Compiler versions:
+ //
 diff --git a/library/lib/platforms/glfw/glfw_input.cpp b/library/lib/platforms/glfw/glfw_input.cpp
 index 9b31fcfa..00bb8f3c 100644
 --- a/library/lib/platforms/glfw/glfw_input.cpp
