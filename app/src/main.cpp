@@ -1,6 +1,7 @@
 #include <borealis.hpp>
 
 #include "utils/config.hpp"
+#include "api/stremio/streaming_server.hpp"
 #include "utils/download.hpp"
 #include "utils/offline_library.hpp"
 #include "utils/image_cache.hpp"
@@ -131,6 +132,8 @@ int main(int argc, char* argv[]) {
     if (!conf.init()) {
         return 0;
     }
+    // the Stremio streaming server torrent streams play through, if any (api/stremio/streaming_server.hpp)
+    stremio::streaming::configure(conf.getItem(AppConfig::STREMIO_STREAMING_SERVER, std::string()));
 
     // Init the app and i18n
     if (!brls::Application::init()) {

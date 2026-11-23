@@ -62,6 +62,7 @@ private:
     BRLS_BIND(brls::BooleanCell, btnTls, "setting/network/tls");
     BRLS_BIND(brls::BooleanCell, btnProxy, "setting/network/proxy_status");
     BRLS_BIND(brls::InputCell, inputProxy, "setting/network/proxy");
+    BRLS_BIND(brls::InputCell, inputStremioServer, "setting/network/stremio_server");
     BRLS_BIND(SelectorCell, selectorKeymap, "setting/keymap");
     BRLS_BIND(SelectorCell, selectorLang, "setting/language");
     BRLS_BIND(SelectorCell, selectorTheme, "setting/ui/theme");

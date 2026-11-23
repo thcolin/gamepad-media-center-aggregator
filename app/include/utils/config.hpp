@@ -135,6 +135,7 @@ public:
         REQUEST_TIMEOUT,
         HTTP_PROXY_STATUS,
         HTTP_PROXY,
+        STREMIO_STREAMING_SERVER,  // a Stremio streaming server for torrent streams, as typed; "" = none
 
         /// Library sorts/filters, persisted locally (json object
         /// {itemId: "sortBy,sortOrder,filter"} — /DisplayPreferences does not

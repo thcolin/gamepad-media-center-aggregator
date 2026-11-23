@@ -213,6 +213,8 @@ std::string buildCatalogUrl(const std::string& base, const std::string& type, co
 std::vector<media::Media> resolveAllStreams(
     AddonEngine& engine, const std::string& stremioType, const std::string& stremioId) {
     std::vector<media::Media> all;
+    // torrents play through the Stremio streaming server set in Settings, when there is one
+    const bool viaServer = !streaming::configured().empty();
     for (auto& a : engine.addonsFor("stream", stremioType, stremioId)) {
         std::string url = engine.resourceUrl(a, "stream", stremioType, stremioId);
         std::vector<StreamOption> streams;
@@ -222,7 +224,7 @@ std::vector<media::Media> resolveAllStreams(
             brls::Logger::warning("stremio stream {}: {}", url, ex.what());
             continue;
         }
-        for (auto& s : streams) all.push_back(streamToMedia(s, a.manifest.name));
+        for (auto& s : streams) all.push_back(streamToMedia(s, a.manifest.name, viaServer));
     }
 #if defined(__PSV__)
     // PS Vita: >1080p exceeds the hardware H.264 decoder (level 4.x) and
@@ -954,9 +956,16 @@ media::PlaybackSource StremioBackend::resolvePlayback(
     // getItemDetail already fanned out /stream and stored the chosen playback URL
     // in version.parts[0].key (Stremio has no per-request transcode decision). An
     // empty url means no playable source -> the player shows a "playback failed"
-    // dialog. We never throw: a cross-TU throw on the borealis async task loop
-    // (which does not wrap tasks in try/catch) would abort the app.
+    // dialog. A torrent opens on the Stremio streaming server set in Settings
+    // (api/stremio/streaming_server.hpp), which throws with the reason when it can't:
+    // both callers (PlayerView, AudioPlayer) catch around this call, inside their task.
     if (version.parts.empty() || version.parts.front().key.empty()) return {};
+    const std::string& key = version.parts.front().key;
+    if (key.rfind(streaming::keyScheme, 0) == 0) {
+        // the server holds the request until the torrent has data: mpv waits longer than
+        // for a link. No proxy: the server is the user's own, usually on the local network.
+        return {streaming::open(key), "network-timeout=120", false, "directplay"};
+    }
     std::string extra = "network-timeout=" + std::to_string(HTTP::TIMEOUT / 100);
     if (HTTP::PROXY_STATUS) extra += ",http-proxy=\"" + HTTP::PROXY + "\"";
     return {version.parts.front().key, extra, false, "directplay"};

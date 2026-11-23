@@ -113,6 +113,8 @@
                     id="setting/network/proxy_passwd"
                     type="password"
                     visibility="gone" />
+                <brls:InputCell
+                    id="setting/network/stremio_server" />
             </brls:Box>
 
             <brls:Header

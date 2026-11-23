@@ -27,6 +27,7 @@
 #include "view/library_manager.hpp"
 #include "api/plex.hpp"
 #include "api/media/langs.hpp"
+#include "api/stremio/streaming_server.hpp"
 #include "utils/dialog.hpp"
 #ifdef __SWITCH__
 #include "utils/overclock.hpp"
@@ -439,6 +440,32 @@ void SettingTab::onCreate() {
         AppConfig::instance().setItem(AppConfig::HTTP_PROXY, value);
     });
     inputProxy->setVisibility(HTTP::PROXY_STATUS ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+
+    // A Stremio streaming server for torrent streams (api/stremio/streaming_server.hpp), checked
+    // at once so a typo shows. Empty, torrents stay unplayable here as before.
+    inputStremioServer->init(
+        "main/setting/network/stremio_server"_i18n,
+        conf.getItem(AppConfig::STREMIO_STREAMING_SERVER, std::string()),
+        [this](std::string value) {
+            const std::string url = stremio::streaming::normalizeServerUrl(value);
+            if (url.empty() && !value.empty()) {
+                // not an address: the field goes back to empty, which turns the server off
+                brls::Application::notify("main/stremio/server/invalid"_i18n);
+                brls::sync([this]() { this->inputStremioServer->setValue(""); });
+                return;
+            }
+            AppConfig::instance().setItem(AppConfig::STREMIO_STREAMING_SERVER, value);  // as typed, normalized on use
+            stremio::streaming::configure(value);
+            if (url.empty()) return;
+            ThreadPool::instance().submit([url](HTTP&) {
+                const bool answered = stremio::streaming::reachable(url);
+                brls::sync([answered]() {
+                    brls::Application::notify(
+                        answered ? "main/stremio/server/answered"_i18n : "main/stremio/server/silent"_i18n);
+                });
+            });
+        },
+        "main/setting/network/stremio_server_none"_i18n, "main/setting/network/stremio_server_hint"_i18n, 128);
 
     btnSync->init("main/setting/others/sync"_i18n, AppConfig::SYNC, [](bool value) {
         AppConfig::SYNC = value;

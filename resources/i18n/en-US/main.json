@@ -312,7 +312,10 @@
       "timeout": "Request timeout (ms)",
       "proxy": "Proxy Setting",
       "host": "Host",
-      "port": "Port"
+      "port": "Port",
+      "stremio_server": "Stremio streaming server",
+      "stremio_server_hint": "A Stremio streaming server that plays torrent streams, such as http://192.168.1.10:11470",
+      "stremio_server_none": "Off"
     },
     "ui": {
       "header": "UI",
@@ -449,6 +452,14 @@
     "error": "Unable to load"
   },
   "stremio": {
+    "server": {
+      "none": "Set a Stremio streaming server in Settings (Network) to play torrents",
+      "unreachable": "The Stremio streaming server at {} doesn't answer",
+      "open_failed": "The Stremio streaming server couldn't start this torrent ({})",
+      "answered": "The Stremio streaming server answered",
+      "silent": "The Stremio streaming server doesn't answer",
+      "invalid": "That isn't a server address. Example: http://192.168.1.10:11470"
+    },
     "subtitle": {
       "none": "No subtitles available. Install a subtitles addon (e.g. OpenSubtitles) in your Stremio account to get some here."
     },
@@ -489,7 +500,7 @@
       "torrents": "{} torrent source(s) — debrid required",
       "links": "{} external link(s) — not playable here",
       "more": "+{} more playable source(s)",
-      "torrents_help": "These sources are raw torrents. This platform has no torrent client: install a debrid-enabled addon (Torrentio + Real-Debrid, Comet, MediaFusion…) in your Stremio account to get playable links.",
+      "torrents_help": "These sources are raw torrents. This platform has no torrent client: set a Stremio streaming server in Settings (Network) to play them through it, or install a debrid-enabled addon (Torrentio + Real-Debrid, Comet, MediaFusion…) in your Stremio account to get playable links.",
       "links_help": "These sources are external links (browser or third-party service) that cannot be played directly in the app on this platform."
     }
   }
